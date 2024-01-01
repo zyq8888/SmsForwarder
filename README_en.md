@@ -36,7 +36,7 @@ Including active control of the server and client, allowing you to easily and re
 
 ## Screenshots :
 
-![界面预览](https://images.gitee.com/uploads/images/2022/0606/133422_808b4589_16273.png "界面预览.png")
+![界面预览](pic/界面预览.jpeg "界面预览.jpg")
 
 See more screenshots：https://github.com/pppscn/SmsForwarder/wiki
 
@@ -50,13 +50,13 @@ See more screenshots：https://github.com/pppscn/SmsForwarder/wiki
 
 > ⚠ Internet storage: https://wws.lanzoui.com/b025yl86h, access password: `pppscn`
 
-> ⚠ CoolAPK.com: https://www.coolapk.com/apk/com.idormy.sms.forwarder
-
 ## Manual
 
 > ⚠ GitHub: https://github.com/pppscn/SmsForwarder/wiki
 
 > ⚠ Gitee: https://gitee.com/pp/SmsForwarder/wikis/pages
+
+![使用流程与问题排查流程](pic/使用流程与问题排查流程.png "使用流程与问题排查流程.png")
 
 --------
 
@@ -65,11 +65,15 @@ See more screenshots：https://github.com/pppscn/SmsForwarder/wiki
 + Submit an issue or Pull Request.
 + Join group chat (only Chinese groups/channels available currently)
 
-| QQ Channel: q7oofwp13s | DingTalk | WeCom |
-|  ----  |  ----  | ----  |
-| ![QQ频道号: q7oofwp13s](pic/qq_channel.png "QQ频道号: q7oofwp13s") | ![钉钉客户群](pic/dingtalk.png "钉钉客户群") | ![企业微信群](pic/qywechat.png "企业微信群") |
+| QQ Channel | DingTalk Group | Telegram Group |
+|  :--:  |  :--:  | :--:  |
+| ![QQ Channel: q7oofwp13s](pic/qq_channel.png "QQ Channel: q7oofwp13s") | ![DingTalk Group](pic/dingtalk.png "DingTalk Group") | ![Telegram Group](pic/tg.png "Telegram Group") |
+| QQ Channel: q7oofwp13s |Group No. 29760014208 | [+QBZgnL_fxYM0NjE9](https://t.me/+QBZgnL_fxYM0NjE9) |
+
 
 ## Acknowledgements
+
+> [Thanks to all the enthusiastic netizens who sponsored this project --> Reward list](https://gitee.com/pp/SmsForwarder/wikis/pages?sort_id=4912193&doc_id=1821427)
 
 > Thanks to the projects below, `SmsForwarder` won't exists without them!
 
@@ -80,7 +84,9 @@ See more screenshots：https://github.com/pppscn/SmsForwarder/wiki
 + https://github.com/mainfunx/frpc_android (reverse proxy)
 + https://github.com/gyf-dev/Cactus (Keep Alive)
 + https://github.com/yanzhenjie/AndServer (HttpServer)
-+ [<img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.svg?_ga=2.126618957.1361252949.1638261367-1417196221.1635638144&_gl=1*1pfl3dq*_ga*MTQxNzE5NjIyMS4xNjM1NjM4MTQ0*_ga_V0XZL7QHEB*MTYzODMzMjA4OC43LjAuMTYzODMzMjA5Ny4w" alt="GitHub license" style="zoom:50%;" />](https://jb.gg/OpenSourceSupport)  (License Certificate for JetBrains All Products Pack)
++ https://github.com/jenly1314/Location (Location)
++ https://gitee.com/xuankaicat/kmnkt (socket)
++ [<img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.svg?_ga=2.126618957.1361252949.1638261367-1417196221.1635638144&_gl=1*1pfl3dq*_ga*MTQxNzE5NjIyMS4xNjM1NjM4MTQ0*_ga_V0XZL7QHEB*MTYzODMzMjA4OC43LjAuMTYzODMzMjA5Ny4w" alt="GitHub license" style="width：96px" width="96" />](https://jb.gg/OpenSourceSupport)  (License Certificate for JetBrains All Products Pack)
 
 --------
 

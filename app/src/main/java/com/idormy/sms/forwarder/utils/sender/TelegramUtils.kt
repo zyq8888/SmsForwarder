@@ -1,7 +1,7 @@
 package com.idormy.sms.forwarder.utils.sender
 
 import android.text.TextUtils
-import android.util.Log
+import com.idormy.sms.forwarder.utils.Log
 import com.google.gson.Gson
 import com.idormy.sms.forwarder.database.entity.Rule
 import com.idormy.sms.forwarder.entity.MsgInfo
@@ -19,8 +19,6 @@ import okhttp3.Response
 import okhttp3.Route
 import java.net.*
 
-
-@Suppress("PrivatePropertyName", "UNUSED_PARAMETER", "unused")
 class TelegramUtils private constructor() {
     companion object {
 
@@ -29,8 +27,10 @@ class TelegramUtils private constructor() {
         fun sendMsg(
             setting: TelegramSetting,
             msgInfo: MsgInfo,
-            rule: Rule?,
-            logId: Long?,
+            rule: Rule? = null,
+            senderIndex: Int = 0,
+            logId: Long = 0L,
+            msgId: Long = 0L
         ) {
             if (setting.method == null || setting.method == "POST") {
                 msgInfo.content = htmlEncode(msgInfo.content)
@@ -40,7 +40,7 @@ class TelegramUtils private constructor() {
             val content: String = if (rule != null) {
                 msgInfo.getContentForSend(rule.smsTemplate, rule.regexReplace)
             } else {
-                msgInfo.getContentForSend(SettingUtils.smsTemplate.toString())
+                msgInfo.getContentForSend(SettingUtils.smsTemplate)
             }
 
             var requestUrl = if (setting.apiToken.startsWith("http")) {
@@ -116,26 +116,22 @@ class TelegramUtils private constructor() {
 
                     override fun onError(e: ApiException) {
                         Log.e(TAG, e.detailMessage)
-                        SendUtils.updateLogs(logId, 0, e.displayMessage)
+                        val status = 0
+                        SendUtils.updateLogs(logId, status, e.displayMessage)
+                        SendUtils.senderLogic(status, msgInfo, rule, senderIndex, msgId)
                     }
 
                     override fun onSuccess(response: String) {
                         Log.i(TAG, response)
 
                         val resp = Gson().fromJson(response, TelegramResult::class.java)
-                        if (resp?.ok == true) {
-                            SendUtils.updateLogs(logId, 2, response)
-                        } else {
-                            SendUtils.updateLogs(logId, 0, response)
-                        }
+                        val status = if (resp?.ok == true) 2 else 0
+                        SendUtils.updateLogs(logId, status, response)
+                        SendUtils.senderLogic(status, msgInfo, rule, senderIndex, msgId)
                     }
 
                 })
 
-        }
-
-        fun sendMsg(setting: TelegramSetting, msgInfo: MsgInfo) {
-            sendMsg(setting, msgInfo, null, null)
         }
 
         private fun htmlEncode(source: String?): String {

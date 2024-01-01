@@ -6,32 +6,36 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.location.Geocoder
+import android.net.ConnectivityManager
+import android.net.wifi.WifiManager
 import android.os.Build
-import android.util.Log
 import androidx.lifecycle.MutableLiveData
 import androidx.multidex.MultiDex
 import androidx.work.Configuration
 import com.gyf.cactus.Cactus
 import com.gyf.cactus.callback.CactusCallback
 import com.gyf.cactus.ext.cactus
+import com.hjq.language.MultiLanguages
+import com.hjq.language.OnLanguageListener
 import com.idormy.sms.forwarder.activity.MainActivity
 import com.idormy.sms.forwarder.core.Core
 import com.idormy.sms.forwarder.database.AppDatabase
-import com.idormy.sms.forwarder.database.repository.FrpcRepository
-import com.idormy.sms.forwarder.database.repository.LogsRepository
-import com.idormy.sms.forwarder.database.repository.RuleRepository
-import com.idormy.sms.forwarder.database.repository.SenderRepository
+import com.idormy.sms.forwarder.database.repository.*
 import com.idormy.sms.forwarder.entity.SimInfo
+import com.idormy.sms.forwarder.receiver.BatteryReceiver
 import com.idormy.sms.forwarder.receiver.CactusReceiver
-import com.idormy.sms.forwarder.service.BatteryService
+import com.idormy.sms.forwarder.receiver.LockScreenReceiver
+import com.idormy.sms.forwarder.receiver.NetworkChangeReceiver
 import com.idormy.sms.forwarder.service.ForegroundService
-import com.idormy.sms.forwarder.service.HttpService
+import com.idormy.sms.forwarder.service.HttpServerService
+import com.idormy.sms.forwarder.service.LocationService
 import com.idormy.sms.forwarder.utils.*
 import com.idormy.sms.forwarder.utils.sdkinit.UMengInit
 import com.idormy.sms.forwarder.utils.sdkinit.XBasicLibInit
 import com.idormy.sms.forwarder.utils.sdkinit.XUpdateInit
 import com.idormy.sms.forwarder.utils.tinker.TinkerLoadLibrary
-import com.xuexiang.xutil.app.AppUtils
+import com.king.location.LocationClient
 import io.reactivex.Observable
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.Disposable
@@ -42,15 +46,17 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
 
-@Suppress("PrivatePropertyName")
+@Suppress("DEPRECATION")
 class App : Application(), CactusCallback, Configuration.Provider by Core {
 
     val applicationScope = CoroutineScope(SupervisorJob())
     val database by lazy { AppDatabase.getInstance(this) }
     val frpcRepository by lazy { FrpcRepository(database.frpcDao()) }
+    val msgRepository by lazy { MsgRepository(database.msgDao()) }
     val logsRepository by lazy { LogsRepository(database.logsDao()) }
     val ruleRepository by lazy { RuleRepository(database.ruleDao()) }
     val senderRepository by lazy { SenderRepository(database.senderDao()) }
+    val taskRepository by lazy { TaskRepository(database.taskDao()) }
 
     companion object {
         const val TAG: String = "SmsForwarder"
@@ -62,32 +68,32 @@ class App : Application(), CactusCallback, Configuration.Provider by Core {
         var SimInfoList: MutableMap<Int, SimInfo> = mutableMapOf()
 
         //已安装App信息
-        var UserAppList: MutableList<AppUtils.AppInfo> = mutableListOf()
-        var SystemAppList: MutableList<AppUtils.AppInfo> = mutableListOf()
+        var LoadingAppList = false
+        var UserAppList: MutableList<AppInfo> = mutableListOf()
+        var SystemAppList: MutableList<AppInfo> = mutableListOf()
 
         /**
          * @return 当前app是否是调试开发模式
          */
-        val isDebug: Boolean
-            get() = BuildConfig.DEBUG
+        var isDebug: Boolean = BuildConfig.DEBUG
 
-        //Cactus结束时间
-        val mEndDate = MutableLiveData<String>()
-
-        //Cactus上次存活时间
-        val mLastTimer = MutableLiveData<String>()
-
-        //Cactus存活时间
-        val mTimer = MutableLiveData<String>()
-
-        //Cactus运行状态
-        val mStatus = MutableLiveData<Boolean>().apply { value = true }
-
+        //Cactus相关
+        val mEndDate = MutableLiveData<String>() //结束时间
+        val mLastTimer = MutableLiveData<String>() //上次存活时间
+        val mTimer = MutableLiveData<String>() //存活时间
+        val mStatus = MutableLiveData<Boolean>().apply { value = true } //运行状态
         var mDisposable: Disposable? = null
+
+        //Location相关
+        val LocationClient by lazy { LocationClient(context) }
+        val Geocoder by lazy { Geocoder(context) }
+        val DateFormat by lazy { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
     }
 
     override fun attachBaseContext(base: Context) {
-        super.attachBaseContext(base)
+        //super.attachBaseContext(base)
+        // 绑定语种
+        super.attachBaseContext(MultiLanguages.attach(base))
         //解决4.x运行崩溃的问题
         MultiDex.install(this)
     }
@@ -104,56 +110,59 @@ class App : Application(), CactusCallback, Configuration.Provider by Core {
             //动态加载FrpcLib
             val libPath = filesDir.absolutePath + "/libs"
             val soFile = File(libPath)
-            try {
-                TinkerLoadLibrary.installNativeLibraryPath(classLoader, soFile)
-            } catch (throwable: Throwable) {
-                Log.e("APP", throwable.message.toString())
+            if (soFile.exists()) {
+                try {
+                    TinkerLoadLibrary.installNativeLibraryPath(classLoader, soFile)
+                } catch (throwable: Throwable) {
+                    Log.e("APP", throwable.message.toString())
+                }
             }
 
             //启动前台服务
-            val intent = Intent(this, ForegroundService::class.java)
+            val foregroundServiceIntent = Intent(this, ForegroundService::class.java)
+            foregroundServiceIntent.action = "START"
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
+                startForegroundService(foregroundServiceIntent)
             } else {
-                startService(intent)
-            }
-
-            //电池状态监听
-            val batteryServiceIntent = Intent(this, BatteryService::class.java)
-            startService(batteryServiceIntent)
-
-            //异步获取所有已安装 App 信息
-            if (SettingUtils.enableLoadAppList) {
-                val enableLoadUserAppList = SettingUtils.enableLoadUserAppList
-                val enableLoadSystemAppList = SettingUtils.enableLoadSystemAppList
-                val get = GlobalScope.async(Dispatchers.IO) {
-                    val appInfoList = AppUtils.getAppsInfo()
-                    for (appInfo in appInfoList) {
-                        if (appInfo.isSystem && enableLoadSystemAppList) {
-                            SystemAppList.add(appInfo)
-                        } else if (enableLoadUserAppList) {
-                            UserAppList.add(appInfo)
-                        }
-                    }
-                    UserAppList.sortBy { appInfo -> appInfo.name }
-                    SystemAppList.sortBy { appInfo -> appInfo.name }
-                }
-                GlobalScope.launch(Dispatchers.Main) {
-                    runCatching {
-                        get.await()
-                        Log.d("GlobalScope", "AppUtils.getAppsInfo() Done")
-                        Log.d("GlobalScope", "UserAppList = $UserAppList")
-                        Log.d("GlobalScope", "SystemAppList = $SystemAppList")
-                    }.onFailure {
-                        Log.e("GlobalScope", it.message.toString())
-                    }
-                }
+                startService(foregroundServiceIntent)
             }
 
             //启动HttpServer
             if (HttpServerUtils.enableServerAutorun) {
-                startService(Intent(this, HttpService::class.java))
+                Intent(this, HttpServerService::class.java).also {
+                    startService(it)
+                }
             }
+
+            //启动LocationService
+            if (SettingUtils.enableLocation) {
+                val locationServiceIntent = Intent(this, LocationService::class.java)
+                locationServiceIntent.action = "START"
+                startService(locationServiceIntent)
+            }
+
+            //监听电量&充电状态变化
+            val batteryReceiver = BatteryReceiver()
+            val batteryFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            registerReceiver(batteryReceiver, batteryFilter)
+
+            //监听网络变化
+            val networkReceiver = NetworkChangeReceiver()
+            val networkFilter = IntentFilter().apply {
+                addAction(ConnectivityManager.CONNECTIVITY_ACTION)
+                addAction(WifiManager.WIFI_STATE_CHANGED_ACTION)
+                addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION)
+                //addAction("android.intent.action.DATA_CONNECTION_STATE_CHANGED")
+            }
+            registerReceiver(networkReceiver, networkFilter)
+
+            //监听锁屏&解锁
+            val lockScreenReceiver = LockScreenReceiver()
+            val lockScreenFilter = IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+            }
+            registerReceiver(lockScreenReceiver, lockScreenFilter)
 
             //Cactus 集成双进程前台服务，JobScheduler，onePix(一像素)，WorkManager，无声音乐
             if (SettingUtils.enableCactus) {
@@ -173,7 +182,7 @@ class App : Application(), CactusCallback, Configuration.Provider by Core {
                     setChannelId(FRONT_CHANNEL_ID) //渠道Id
                     setChannelName(FRONT_CHANNEL_NAME) //渠道名
                     setTitle(getString(R.string.app_name))
-                    setContent(SettingUtils.notifyContent.toString())
+                    setContent(SettingUtils.notifyContent)
                     setSmallIcon(R.drawable.ic_forwarder)
                     setLargeIcon(R.mipmap.ic_launcher)
                     setPendingIntent(pendingIntent)
@@ -206,6 +215,7 @@ class App : Application(), CactusCallback, Configuration.Provider by Core {
 
         } catch (e: Exception) {
             e.printStackTrace()
+            Log.e(TAG, "onCreate: $e")
         }
     }
 
@@ -214,14 +224,31 @@ class App : Application(), CactusCallback, Configuration.Provider by Core {
      */
     private fun initLibs() {
         Core.init(this)
+        // 配置文件初始化
+        SharedPreference.init(applicationContext)
+        // 初始化日志打印
+        isDebug = SettingUtils.enableDebugMode
+        Log.init(applicationContext)
         // 转发历史工具类初始化
-        HistoryUtils.init(this)
+        HistoryUtils.init(applicationContext)
         // X系列基础库初始化
         XBasicLibInit.init(this)
         // 版本更新初始化
         XUpdateInit.init(this)
         // 运营统计数据
         UMengInit.init(this)
+        // 初始化语种切换框架
+        MultiLanguages.init(this)
+        // 设置语种变化监听器
+        MultiLanguages.setOnLanguageListener(object : OnLanguageListener {
+            override fun onAppLocaleChange(oldLocale: Locale, newLocale: Locale) {
+                Log.i(TAG, "监听到应用切换了语种，旧语种：$oldLocale，新语种：$newLocale")
+            }
+
+            override fun onSystemLocaleChange(oldLocale: Locale, newLocale: Locale) {
+                Log.i(TAG, "监听到系统切换了语种，旧语种：" + oldLocale + "，新语种：" + newLocale + "，是否跟随系统：" + MultiLanguages.isSystemLanguage(this@App))
+            }
+        })
     }
 
     @SuppressLint("CheckResult")
@@ -238,19 +265,15 @@ class App : Application(), CactusCallback, Configuration.Provider by Core {
         }
         mLastTimer.postValue(dateFormat.format(Date(CactusSave.lastTimer * 1000)))
         mEndDate.postValue(CactusSave.endDate)
-        mDisposable = Observable.interval(1, TimeUnit.SECONDS)
-            .map {
-                oldTimer + it
+        mDisposable = Observable.interval(1, TimeUnit.SECONDS).map {
+            oldTimer + it
+        }.subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread()).subscribe { aLong ->
+            CactusSave.timer = aLong
+            CactusSave.date = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).run {
+                format(Date())
             }
-            .subscribeOn(Schedulers.io())
-            .observeOn(AndroidSchedulers.mainThread())
-            .subscribe { aLong ->
-                CactusSave.timer = aLong
-                CactusSave.date = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).run {
-                    format(Date())
-                }
-                mTimer.value = dateFormat.format(Date(aLong * 1000))
-            }
+            mTimer.value = dateFormat.format(Date(aLong * 1000))
+        }
     }
 
     override fun onStop() {

@@ -1,22 +1,22 @@
 package com.idormy.sms.forwarder.utils.sender
 
 import android.text.TextUtils
-import android.util.Log
+import com.idormy.sms.forwarder.utils.Log
 import com.google.gson.Gson
 import com.idormy.sms.forwarder.R
 import com.idormy.sms.forwarder.database.entity.Rule
 import com.idormy.sms.forwarder.entity.MsgInfo
 import com.idormy.sms.forwarder.entity.result.DingtalkInnerRobotResult
 import com.idormy.sms.forwarder.entity.setting.DingtalkInnerRobotSetting
-import com.idormy.sms.forwarder.utils.MMKVUtils
 import com.idormy.sms.forwarder.utils.SendUtils
 import com.idormy.sms.forwarder.utils.SettingUtils
+import com.idormy.sms.forwarder.utils.SharedPreference
 import com.xuexiang.xhttp2.XHttp
 import com.xuexiang.xhttp2.cache.model.CacheMode
 import com.xuexiang.xhttp2.callback.SimpleCallBack
 import com.xuexiang.xhttp2.exception.ApiException
-import com.xuexiang.xui.utils.ResUtils.getString
 import com.xuexiang.xutil.net.NetworkUtils
+import com.xuexiang.xutil.resource.ResUtils.getString
 import okhttp3.Credentials
 import okhttp3.Response
 import okhttp3.Route
@@ -26,7 +26,6 @@ import java.net.PasswordAuthentication
 import java.net.Proxy
 
 //钉钉企业内机器人
-@Suppress("PrivatePropertyName", "UNUSED_PARAMETER")
 class DingtalkInnerRobotUtils private constructor() {
     companion object {
 
@@ -35,14 +34,15 @@ class DingtalkInnerRobotUtils private constructor() {
         fun sendMsg(
             setting: DingtalkInnerRobotSetting,
             msgInfo: MsgInfo,
-            rule: Rule?,
-            logId: Long?,
+            rule: Rule? = null,
+            senderIndex: Int = 0,
+            logId: Long = 0L,
+            msgId: Long = 0L
         ) {
-
-            val accessToken: String? = MMKVUtils.getString("accessToken_" + setting.agentID, "")
-            val expiresIn: Long = MMKVUtils.getLong("expiresIn_" + setting.agentID, 0L)
+            var accessToken: String by SharedPreference("accessToken_" + setting.agentID, "")
+            var expiresIn: Long by SharedPreference("expiresIn_" + setting.agentID, 0L)
             if (!TextUtils.isEmpty(accessToken) && expiresIn > System.currentTimeMillis()) {
-                return sendTextMsg(setting, msgInfo, rule, logId)
+                return sendTextMsg(setting, msgInfo, rule, senderIndex, logId, msgId)
             }
 
             val requestUrl = "https://api.dingtalk.com/v1.0/oauth2/accessToken"
@@ -57,9 +57,7 @@ class DingtalkInnerRobotUtils private constructor() {
             val request = XHttp.post(requestUrl)
 
             //设置代理
-            if ((setting.proxyType == Proxy.Type.HTTP || setting.proxyType == Proxy.Type.SOCKS)
-                && !TextUtils.isEmpty(setting.proxyHost) && !TextUtils.isEmpty(setting.proxyPort)
-            ) {
+            if ((setting.proxyType == Proxy.Type.HTTP || setting.proxyType == Proxy.Type.SOCKS) && !TextUtils.isEmpty(setting.proxyHost) && !TextUtils.isEmpty(setting.proxyPort)) {
                 //代理服务器的IP和端口号
                 Log.d(TAG, "proxyHost = ${setting.proxyHost}, proxyPort = ${setting.proxyPort}")
                 val proxyHost = if (NetworkUtils.isIP(setting.proxyHost)) setting.proxyHost else NetworkUtils.getDomainAddress(setting.proxyHost)
@@ -72,18 +70,14 @@ class DingtalkInnerRobotUtils private constructor() {
                 request.okproxy(Proxy(setting.proxyType, InetSocketAddress(proxyHost, proxyPort)))
 
                 //代理的鉴权账号密码
-                if (setting.proxyAuthenticator == true
-                    && (!TextUtils.isEmpty(setting.proxyUsername) || !TextUtils.isEmpty(setting.proxyPassword))
-                ) {
+                if (setting.proxyAuthenticator == true && (!TextUtils.isEmpty(setting.proxyUsername) || !TextUtils.isEmpty(setting.proxyPassword))) {
                     Log.i(TAG, "proxyUsername = ${setting.proxyUsername}, proxyPassword = ${setting.proxyPassword}")
 
                     if (setting.proxyType == Proxy.Type.HTTP) {
                         request.okproxyAuthenticator { _: Route?, response: Response ->
                             //设置代理服务器账号密码
                             val credential = Credentials.basic(setting.proxyUsername.toString(), setting.proxyPassword.toString())
-                            response.request().newBuilder()
-                                .header("Proxy-Authorization", credential)
-                                .build()
+                            response.request().newBuilder().header("Proxy-Authorization", credential).build()
                         }
                     } else {
                         Authenticator.setDefault(object : Authenticator() {
@@ -95,17 +89,14 @@ class DingtalkInnerRobotUtils private constructor() {
                 }
             }
 
-            request.upJson(requestMsg)
-                .keepJson(true)
-                .ignoreHttpsCert()
-                .timeOut((SettingUtils.requestTimeout * 1000).toLong()) //超时时间10s
-                .cacheMode(CacheMode.NO_CACHE)
-                .timeStamp(true)
-                .execute(object : SimpleCallBack<String>() {
+            request.upJson(requestMsg).keepJson(true).ignoreHttpsCert().timeOut((SettingUtils.requestTimeout * 1000).toLong()) //超时时间10s
+                .cacheMode(CacheMode.NO_CACHE).timeStamp(true).execute(object : SimpleCallBack<String>() {
 
                     override fun onError(e: ApiException) {
                         Log.e(TAG, e.detailMessage)
-                        SendUtils.updateLogs(logId, 0, e.displayMessage)
+                        val status = 0
+                        SendUtils.updateLogs(logId, status, e.displayMessage)
+                        SendUtils.senderLogic(status, msgInfo, rule, senderIndex, msgId)
                     }
 
                     override fun onSuccess(response: String) {
@@ -113,11 +104,12 @@ class DingtalkInnerRobotUtils private constructor() {
 
                         val resp = Gson().fromJson(response, DingtalkInnerRobotResult::class.java)
                         if (!TextUtils.isEmpty(resp?.accessToken)) {
-                            MMKVUtils.put("accessToken_" + setting.agentID, resp.accessToken)
-                            MMKVUtils.put("expiresIn_" + setting.agentID, System.currentTimeMillis() + ((resp.expireIn ?: 7200) - 120) * 1000L) //提前2分钟过期
-                            sendTextMsg(setting, msgInfo, rule, logId)
+                            accessToken = resp.accessToken.toString()
+                            expiresIn = System.currentTimeMillis() + ((resp.expireIn ?: 7200) - 120) * 1000L //提前2分钟过期
+                            sendTextMsg(setting, msgInfo, rule, senderIndex, logId, msgId)
                         } else {
                             SendUtils.updateLogs(logId, 0, String.format(getString(R.string.request_failed_tips), response))
+                            SendUtils.senderLogic(0, msgInfo, rule, senderIndex, msgId)
                         }
                     }
 
@@ -129,8 +121,10 @@ class DingtalkInnerRobotUtils private constructor() {
         private fun sendTextMsg(
             setting: DingtalkInnerRobotSetting,
             msgInfo: MsgInfo,
-            rule: Rule?,
-            logId: Long?,
+            rule: Rule? = null,
+            senderIndex: Int = 0,
+            logId: Long = 0L,
+            msgId: Long = 0L
         ) {
             val requestUrl = "https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend"
             Log.d(TAG, "requestUrl：$requestUrl")
@@ -138,7 +132,7 @@ class DingtalkInnerRobotUtils private constructor() {
             val content: String = if (rule != null) {
                 msgInfo.getContentForSend(rule.smsTemplate, rule.regexReplace)
             } else {
-                msgInfo.getContentForSend(SettingUtils.smsTemplate.toString())
+                msgInfo.getContentForSend(SettingUtils.smsTemplate)
             }
 
             val msgParam: MutableMap<String, Any> = mutableMapOf()
@@ -165,9 +159,7 @@ class DingtalkInnerRobotUtils private constructor() {
             val request = XHttp.post(requestUrl)
 
             //设置代理
-            if ((setting.proxyType == Proxy.Type.HTTP || setting.proxyType == Proxy.Type.SOCKS)
-                && !TextUtils.isEmpty(setting.proxyHost) && !TextUtils.isEmpty(setting.proxyPort)
-            ) {
+            if ((setting.proxyType == Proxy.Type.HTTP || setting.proxyType == Proxy.Type.SOCKS) && !TextUtils.isEmpty(setting.proxyHost) && !TextUtils.isEmpty(setting.proxyPort)) {
                 //代理服务器的IP和端口号
                 Log.d(TAG, "proxyHost = ${setting.proxyHost}, proxyPort = ${setting.proxyPort}")
                 val proxyHost = if (NetworkUtils.isIP(setting.proxyHost)) setting.proxyHost else NetworkUtils.getDomainAddress(setting.proxyHost)
@@ -180,18 +172,14 @@ class DingtalkInnerRobotUtils private constructor() {
                 request.okproxy(Proxy(setting.proxyType, InetSocketAddress(proxyHost, proxyPort)))
 
                 //代理的鉴权账号密码
-                if (setting.proxyAuthenticator == true
-                    && (!TextUtils.isEmpty(setting.proxyUsername) || !TextUtils.isEmpty(setting.proxyPassword))
-                ) {
+                if (setting.proxyAuthenticator == true && (!TextUtils.isEmpty(setting.proxyUsername) || !TextUtils.isEmpty(setting.proxyPassword))) {
                     Log.i(TAG, "proxyUsername = ${setting.proxyUsername}, proxyPassword = ${setting.proxyPassword}")
 
                     if (setting.proxyType == Proxy.Type.HTTP) {
                         request.okproxyAuthenticator { _: Route?, response: Response ->
                             //设置代理服务器账号密码
                             val credential = Credentials.basic(setting.proxyUsername.toString(), setting.proxyPassword.toString())
-                            response.request().newBuilder()
-                                .header("Proxy-Authorization", credential)
-                                .build()
+                            response.request().newBuilder().header("Proxy-Authorization", credential).build()
                         }
                     } else {
                         Authenticator.setDefault(object : Authenticator() {
@@ -203,39 +191,33 @@ class DingtalkInnerRobotUtils private constructor() {
                 }
             }
 
-            request.upJson(requestMsg)
-                .headers("x-acs-dingtalk-access-token", MMKVUtils.getString("accessToken_" + setting.agentID, ""))
+            val accessToken: String by SharedPreference("accessToken_" + setting.agentID, "")
+            request.upJson(requestMsg).headers("x-acs-dingtalk-access-token", accessToken)
                 .keepJson(true)
                 .ignoreHttpsCert()
                 .timeOut((SettingUtils.requestTimeout * 1000).toLong()) //超时时间10s
-                .cacheMode(CacheMode.NO_CACHE)
-                .retryCount(SettingUtils.requestRetryTimes) //超时重试的次数
+                .cacheMode(CacheMode.NO_CACHE).retryCount(SettingUtils.requestRetryTimes) //超时重试的次数
                 .retryDelay(SettingUtils.requestDelayTime) //超时重试的延迟时间
                 .retryIncreaseDelay(SettingUtils.requestDelayTime) //超时重试叠加延时
-                .timeStamp(true)
-                .execute(object : SimpleCallBack<String>() {
+                .timeStamp(true).execute(object : SimpleCallBack<String>() {
 
                     override fun onError(e: ApiException) {
                         Log.e(TAG, e.detailMessage)
-                        SendUtils.updateLogs(logId, 0, e.displayMessage)
+                        val status = 0
+                        SendUtils.updateLogs(logId, status, e.displayMessage)
+                        SendUtils.senderLogic(status, msgInfo, rule, senderIndex, msgId)
                     }
 
                     override fun onSuccess(response: String) {
                         Log.i(TAG, response)
 
                         val resp = Gson().fromJson(response, DingtalkInnerRobotResult::class.java)
-                        if (!TextUtils.isEmpty(resp?.processQueryKey)) {
-                            SendUtils.updateLogs(logId, 2, response)
-                        } else {
-                            SendUtils.updateLogs(logId, 0, response)
-                        }
+                        val status = if (!TextUtils.isEmpty(resp?.processQueryKey)) 2 else 0
+                        SendUtils.updateLogs(logId, status, response)
+                        SendUtils.senderLogic(status, msgInfo, rule, senderIndex, msgId)
                     }
 
                 })
-        }
-
-        fun sendMsg(setting: DingtalkInnerRobotSetting, msgInfo: MsgInfo) {
-            sendMsg(setting, msgInfo, null, null)
         }
 
     }

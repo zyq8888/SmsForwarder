@@ -1,5 +1,6 @@
 package com.idormy.sms.forwarder.service
 
+import android.annotation.SuppressLint
 import android.app.*
 import android.content.Intent
 import android.graphics.BitmapFactory
@@ -7,15 +8,18 @@ import android.graphics.Color
 import android.os.Build
 import android.os.IBinder
 import android.text.TextUtils
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Observer
-import com.idormy.sms.forwarder.App
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import com.idormy.sms.forwarder.R
 import com.idormy.sms.forwarder.activity.MainActivity
-import com.idormy.sms.forwarder.database.AppDatabase
+import com.idormy.sms.forwarder.core.Core
 import com.idormy.sms.forwarder.utils.*
+import com.idormy.sms.forwarder.utils.task.CronJobScheduler
+import com.idormy.sms.forwarder.workers.LoadAppListWorker
 import com.jeremyliao.liveeventbus.LiveEventBus
+import com.xuexiang.xutil.XUtil
 import com.xuexiang.xutil.file.FileUtils
 import frpclib.Frpclib
 import io.reactivex.Single
@@ -28,44 +32,42 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 
-@Suppress("PrivatePropertyName", "DeferredResultUnused", "OPT_IN_USAGE")
+@SuppressLint("SimpleDateFormat")
+@Suppress("PrivatePropertyName", "DeferredResultUnused", "OPT_IN_USAGE", "DEPRECATION", "LiftReturnOrAssignment")
 class ForegroundService : Service() {
-    private val TAG: String = "ForegroundService"
+
+    private val TAG: String = ForegroundService::class.java.simpleName
+    private var notificationManager: NotificationManager? = null
+
     private val compositeDisposable = CompositeDisposable()
     private val frpcObserver = Observer { uid: String ->
         if (Frpclib.isRunning(uid)) {
             return@Observer
         }
-        AppDatabase.getInstance(App.context)
-            .frpcDao()
-            .get(uid)
-            .flatMap { (uid1, _, config) ->
-                val error = Frpclib.runContent(uid1, config)
-                Single.just(error)
+        Core.frpc.get(uid).flatMap { (uid1, _, config) ->
+            val error = Frpclib.runContent(uid1, config)
+            Single.just(error)
+        }.subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread()).subscribe(object : SingleObserver<String> {
+            override fun onSubscribe(d: Disposable) {
+                compositeDisposable.add(d)
             }
-            .subscribeOn(Schedulers.io())
-            .observeOn(AndroidSchedulers.mainThread())
-            .subscribe(object : SingleObserver<String> {
-                override fun onSubscribe(d: Disposable) {
-                    compositeDisposable.add(d)
-                }
 
-                override fun onError(e: Throwable) {
-                    e.printStackTrace()
+            override fun onError(e: Throwable) {
+                e.printStackTrace()
+                Log.e(TAG, "onError: ${e.message}")
+                LiveEventBus.get(EVENT_FRPC_RUNNING_ERROR, String::class.java).post(uid)
+            }
+
+            override fun onSuccess(msg: String) {
+                if (!TextUtils.isEmpty(msg)) {
+                    Log.e(TAG, msg)
                     LiveEventBus.get(EVENT_FRPC_RUNNING_ERROR, String::class.java).post(uid)
+                } else {
+                    LiveEventBus.get(EVENT_FRPC_RUNNING_SUCCESS, String::class.java).post(uid)
                 }
-
-                override fun onSuccess(msg: String) {
-                    if (!TextUtils.isEmpty(msg)) {
-                        Log.e(TAG, msg)
-                        LiveEventBus.get(EVENT_FRPC_RUNNING_ERROR, String::class.java).post(uid)
-                    } else {
-                        LiveEventBus.get(EVENT_FRPC_RUNNING_SUCCESS, String::class.java).post(uid)
-                    }
-                }
-            })
+            }
+        })
     }
-    private var notificationManager: NotificationManager? = null
 
     companion object {
         var isRunning = false
@@ -74,24 +76,80 @@ class ForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
 
+        //纯客户端模式
+        if (SettingUtils.enablePureClientMode) return
+
+        createNotificationChannel()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+
+        //纯客户端模式
+        if (SettingUtils.enablePureClientMode) return START_STICKY
+
+        if (intent != null) {
+            when (intent.action) {
+                "START" -> {
+                    startForegroundService()
+                }
+
+                "STOP" -> {
+                    stopForegroundService()
+                }
+
+                "UPDATE_NOTIFICATION" -> {
+                    val updatedContent = intent.getStringExtra("UPDATED_CONTENT")
+                    updateNotification(updatedContent ?: "")
+                }
+            }
+        }
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        //非纯客户端模式
+        if (!SettingUtils.enablePureClientMode) stopForegroundService()
+
+        super.onDestroy()
+    }
+
+    override fun onBind(intent: Intent): IBinder? {
+        return null
+    }
+
+    private fun startForegroundService() {
+        val notification = createNotification(SettingUtils.notifyContent)
+        startForeground(NOTIFICATION_ID, notification)
+
         try {
-            //纯客户端模式
-            if (SettingUtils.enablePureClientMode) return
-
-            notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            startForeground(FRONT_NOTIFY_ID, createForegroundNotification())
-
             //开关通知监听服务
             if (SettingUtils.enableAppNotify && CommonUtils.isNotificationListenerServiceEnabled(this)) {
                 CommonUtils.toggleNotificationListenerService(this)
             }
 
+            //启动定时任务
+            GlobalScope.async(Dispatchers.IO) {
+                val taskList = Core.task.getByType(TASK_CONDITION_CRON)
+                taskList.forEach { task ->
+                    Log.d(TAG, "task = $task")
+                    CronJobScheduler.cancelTask(task.id)
+                    CronJobScheduler.scheduleTask(task)
+                }
+            }
+
+            //异步获取所有已安装 App 信息
+            if (SettingUtils.enableLoadAppList) {
+                val request = OneTimeWorkRequestBuilder<LoadAppListWorker>().build()
+                WorkManager.getInstance(XUtil.getContext()).enqueue(request)
+            }
+
+            //启动 Frpc
             if (FileUtils.isFileExists(filesDir.absolutePath + "/libs/libgojni.so")) {
                 //监听Frpc启动指令
                 LiveEventBus.get(INTENT_FRPC_APPLY_FILE, String::class.java).observeStickyForever(frpcObserver)
                 //自启动的Frpc
                 GlobalScope.async(Dispatchers.IO) {
-                    val frpcList = AppDatabase.getInstance(App.context).frpcDao().getAutorun()
+                    val frpcList = Core.frpc.getAutorun()
 
                     if (frpcList.isEmpty()) {
                         Log.d(TAG, "没有自启动的Frpc")
@@ -110,39 +168,27 @@ class ForegroundService : Service() {
             isRunning = true
         } catch (e: Exception) {
             e.printStackTrace()
+            Log.e(TAG, "startForegroundService: $e")
             isRunning = false
         }
 
     }
 
-    override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
-        isRunning = true
-        return START_STICKY
-    }
-
-    override fun onDestroy() {
-        //纯客户端模式
-        if (SettingUtils.enablePureClientMode) {
-            super.onDestroy()
-            return
-        }
-
+    private fun stopForegroundService() {
         try {
             stopForeground(true)
+            stopSelf()
             compositeDisposable.dispose()
             isRunning = false
         } catch (e: Exception) {
             e.printStackTrace()
+            Log.e(TAG, "stopForegroundService: $e")
+            isRunning = true
         }
-        super.onDestroy()
     }
 
-    override fun onBind(intent: Intent): IBinder? {
-        return null
-    }
-
-    private fun createForegroundNotification(): Notification {
-
+    private fun createNotificationChannel() {
+        notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val importance = NotificationManager.IMPORTANCE_HIGH
             val notificationChannel = NotificationChannel(FRONT_CHANNEL_ID, FRONT_CHANNEL_NAME, importance)
@@ -155,20 +201,19 @@ class ForegroundService : Service() {
                 notificationManager!!.createNotificationChannel(notificationChannel)
             }
         }
-        val builder = NotificationCompat.Builder(this, FRONT_CHANNEL_ID)
-        builder.setSmallIcon(R.drawable.ic_forwarder)
-        builder.setLargeIcon(BitmapFactory.decodeResource(resources, R.drawable.ic_menu_frpc))
-        // TODO: 部分机型标题会重复待排除
-        // if (DeviceUtils.getDeviceBrand().contains("Xiaomi")) {
-        builder.setContentTitle(getString(R.string.app_name))
-        //}
-        builder.setContentText(SettingUtils.notifyContent.toString())
-        builder.setWhen(System.currentTimeMillis())
-        val activityIntent = Intent(this, MainActivity::class.java)
+    }
+
+    private fun createNotification(content: String): Notification {
+        val notificationIntent = Intent(this, MainActivity::class.java)
         val flags = if (Build.VERSION.SDK_INT >= 30) PendingIntent.FLAG_IMMUTABLE else PendingIntent.FLAG_UPDATE_CURRENT
-        val pendingIntent = PendingIntent.getActivity(this, 0, activityIntent, flags)
-        builder.setContentIntent(pendingIntent)
-        return builder.build()
+        val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, flags)
+
+        return NotificationCompat.Builder(this, FRONT_CHANNEL_ID).setContentTitle(getString(R.string.app_name)).setContentText(content).setSmallIcon(R.drawable.ic_forwarder).setLargeIcon(BitmapFactory.decodeResource(resources, R.drawable.ic_menu_frpc)).setContentIntent(pendingIntent).setWhen(System.currentTimeMillis()).build()
+    }
+
+    private fun updateNotification(updatedContent: String) {
+        val notification = createNotification(updatedContent)
+        notificationManager?.notify(NOTIFICATION_ID, notification)
     }
 
 }

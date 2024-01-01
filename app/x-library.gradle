@@ -40,13 +40,13 @@ configurations.each { configuration ->
         configuration.dependencies.add(dependencies.create(deps.xlibrary.xrouter_compiler))
     }
 
-    if (configuration.name == "debugImplementation") {
+    if (isNeedLeakcanary.toBoolean() && configuration.name == "debugImplementation") {
         //内存泄漏监测leak
         configuration.dependencies.add(dependencies.create(deps.leakcanary))
     }
 }
 
-configurations.all {
+configurations.configureEach {
     resolutionStrategy.force deps.okhttp3
     //总是拉取最新的 build 版本
     resolutionStrategy.cacheChangingModulesFor 0, 'seconds'

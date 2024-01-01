@@ -3,18 +3,18 @@ package com.idormy.sms.forwarder.utils.sender
 import android.annotation.SuppressLint
 import android.text.TextUtils
 import android.util.Base64
-import android.util.Log
+import com.idormy.sms.forwarder.utils.Log
 import com.google.gson.Gson
 import com.idormy.sms.forwarder.database.entity.Rule
 import com.idormy.sms.forwarder.entity.MsgInfo
 import com.idormy.sms.forwarder.entity.setting.WebhookSetting
+import com.idormy.sms.forwarder.utils.AppUtils
 import com.idormy.sms.forwarder.utils.SendUtils
 import com.idormy.sms.forwarder.utils.SettingUtils
 import com.xuexiang.xhttp2.XHttp
 import com.xuexiang.xhttp2.cache.model.CacheMode
 import com.xuexiang.xhttp2.callback.SimpleCallBack
 import com.xuexiang.xhttp2.exception.ApiException
-import com.xuexiang.xutil.app.AppUtils
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
@@ -22,7 +22,6 @@ import java.util.*
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-@Suppress("PrivatePropertyName", "UNUSED_PARAMETER", "unused")
 class WebhookUtils {
     companion object {
 
@@ -31,14 +30,16 @@ class WebhookUtils {
         fun sendMsg(
             setting: WebhookSetting,
             msgInfo: MsgInfo,
-            rule: Rule?,
-            logId: Long?,
+            rule: Rule? = null,
+            senderIndex: Int = 0,
+            logId: Long = 0L,
+            msgId: Long = 0L
         ) {
             val from: String = msgInfo.from
             val content: String = if (rule != null) {
                 msgInfo.getContentForSend(rule.smsTemplate, rule.regexReplace)
             } else {
-                msgInfo.getContentForSend(SettingUtils.smsTemplate.toString())
+                msgInfo.getContentForSend(SettingUtils.smsTemplate)
             }
 
             var requestUrl: String = setting.webServer //推送地址
@@ -46,11 +47,10 @@ class WebhookUtils {
 
             val timestamp = System.currentTimeMillis()
             val orgContent: String = msgInfo.content
-            val deviceMark: String = SettingUtils.extraDeviceMark ?: ""
+            val deviceMark: String = SettingUtils.extraDeviceMark
             val appVersion: String = AppUtils.getAppVersionName()
             val simInfo: String = msgInfo.simInfo
-            @SuppressLint("SimpleDateFormat") val receiveTime =
-                SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(Date()) //smsVo.getDate()
+            val receiveTimeTag = Regex("\\[receive_time(:(.*?))?]")
 
             var sign = ""
             if (!TextUtils.isEmpty(setting.secret)) {
@@ -99,7 +99,10 @@ class WebhookUtils {
                     .replace("[app_version]", URLEncoder.encode(appVersion, "UTF-8"))
                     .replace("[title]", URLEncoder.encode(simInfo, "UTF-8"))
                     .replace("[card_slot]", URLEncoder.encode(simInfo, "UTF-8"))
-                    .replace("[receive_time]", URLEncoder.encode(receiveTime, "UTF-8"))
+                    .replace(receiveTimeTag) {
+                        val format = it.groups[2]?.value
+                        URLEncoder.encode(formatDateTime(msgInfo.date, format), "UTF-8")
+                    }
                     .replace("\n", "%0A")
                 if (!TextUtils.isEmpty(setting.secret)) {
                     webParams = webParams.replace("[timestamp]", timestamp.toString())
@@ -112,7 +115,7 @@ class WebhookUtils {
                 }
                 Log.d(TAG, "method = GET, Url = $requestUrl")
                 XHttp.get(requestUrl).keepJson(true)
-            } else if (webParams != null && webParams.isNotEmpty() && webParams.startsWith("{")) {
+            } else if (!webParams.isNullOrEmpty() && webParams.startsWith("{")) {
                 val bodyMsg = webParams.replace("[from]", from)
                     .replace("[content]", escapeJson(content))
                     .replace("[msg]", escapeJson(content))
@@ -121,7 +124,10 @@ class WebhookUtils {
                     .replace("[app_version]", appVersion)
                     .replace("[title]", escapeJson(simInfo))
                     .replace("[card_slot]", escapeJson(simInfo))
-                    .replace("[receive_time]", receiveTime)
+                    .replace(receiveTimeTag) {
+                        val format = it.groups[2]?.value
+                        formatDateTime(msgInfo.date, format)
+                    }
                     .replace("[timestamp]", timestamp.toString())
                     .replace("[sign]", sign)
                 Log.d(TAG, "method = ${setting.method}, Url = $requestUrl, bodyMsg = $bodyMsg")
@@ -131,7 +137,7 @@ class WebhookUtils {
                     else -> XHttp.post(requestUrl).keepJson(true).upJson(bodyMsg)
                 }
             } else {
-                if (webParams == null || webParams.isEmpty()) {
+                if (webParams.isNullOrEmpty()) {
                     webParams = "from=[from]&content=[content]&timestamp=[timestamp]"
                     if (!TextUtils.isEmpty(sign)) webParams += "&sign=[sign]"
                 }
@@ -153,7 +159,10 @@ class WebhookUtils {
                                 .replace("[app_version]", appVersion)
                                 .replace("[title]", simInfo)
                                 .replace("[card_slot]", simInfo)
-                                .replace("[receive_time]", receiveTime)
+                                .replace(receiveTimeTag) { t ->
+                                    val format = t.groups[2]?.value
+                                    formatDateTime(msgInfo.date, format)
+                                }
                                 .replace("[timestamp]", timestamp.toString())
                                 .replace("[sign]", sign)
                         )
@@ -183,12 +192,16 @@ class WebhookUtils {
 
                     override fun onError(e: ApiException) {
                         Log.e(TAG, e.detailMessage)
-                        SendUtils.updateLogs(logId, 0, e.displayMessage)
+                        val status = 0
+                        SendUtils.updateLogs(logId, status, e.displayMessage)
+                        SendUtils.senderLogic(status, msgInfo, rule, senderIndex, msgId)
                     }
 
                     override fun onSuccess(response: String) {
                         Log.i(TAG, response)
-                        SendUtils.updateLogs(logId, 2, response)
+                        val status = if (!setting.response.isNullOrEmpty() && !response.contains(setting.response)) 0 else 2
+                        SendUtils.updateLogs(logId, status, response)
+                        SendUtils.senderLogic(status, msgInfo, rule, senderIndex, msgId)
                     }
 
                 })
@@ -202,8 +215,13 @@ class WebhookUtils {
             return if (jsonStr.length >= 2) jsonStr.substring(1, jsonStr.length - 1) else jsonStr
         }
 
-        fun sendMsg(setting: WebhookSetting, msgInfo: MsgInfo) {
-            sendMsg(setting, msgInfo, null, null)
+        @SuppressLint("SimpleDateFormat")
+        fun formatDateTime(currentTime: Date, format: String?): String {
+            val actualFormat = format?.removePrefix(":") ?: "yyyy-MM-dd HH:mm:ss"
+            val dateFormat = SimpleDateFormat(actualFormat)
+            dateFormat.timeZone = TimeZone.getTimeZone("UTC")
+            return dateFormat.format(currentTime)
         }
+
     }
 }

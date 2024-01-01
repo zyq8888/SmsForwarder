@@ -1,7 +1,13 @@
 package com.idormy.sms.forwarder.database.dao
 
 import androidx.paging.PagingSource
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Transaction
+import androidx.room.Update
 import com.idormy.sms.forwarder.database.entity.Logs
 import com.idormy.sms.forwarder.database.entity.LogsAndRuleAndSender
 import io.reactivex.Completable
@@ -22,21 +28,11 @@ interface LogsDao {
     @Query("DELETE FROM Logs where type=:type")
     fun deleteAll(type: String): Completable
 
-    @Query("DELETE FROM Logs where time<:time")
-    fun deleteTimeAgo(time: Long)
+    @Query("DELETE FROM Logs")
+    fun deleteAll()
 
     @Update
     fun update(logs: Logs): Completable
-
-    @Query("SELECT * FROM Logs where id=:id")
-    fun get(id: Long): Single<Logs>
-
-    @Query("SELECT count(*) FROM Logs where type=:type and forward_status=:forwardStatus")
-    fun count(type: String, forwardStatus: Int): Single<Int>
-
-    @Transaction
-    @Query("SELECT * FROM Logs WHERE type = :type ORDER BY id DESC")
-    fun pagingSource(type: String): PagingSource<Int, LogsAndRuleAndSender>
 
     @Query(
         "UPDATE Logs SET forward_status=:status" +
@@ -47,4 +43,19 @@ interface LogsDao {
                 " where id=:id"
     )
     fun updateStatus(id: Long, status: Int, response: String): Int
+
+    @Query("SELECT * FROM Logs where id=:id")
+    fun get(id: Long): Single<Logs>
+
+    @Transaction
+    @Query("SELECT * FROM Logs where id=:id")
+    fun getOne(id: Long): LogsAndRuleAndSender
+
+    @Query("SELECT count(*) FROM Logs where type=:type and forward_status=:forwardStatus")
+    fun count(type: String, forwardStatus: Int): Single<Int>
+
+    @Transaction
+    @Query("SELECT * FROM Logs WHERE type = :type ORDER BY id DESC")
+    fun pagingSource(type: String): PagingSource<Int, LogsAndRuleAndSender>
+
 }

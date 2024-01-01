@@ -1,3 +1,5 @@
+//file:noinspection GrDeprecatedAPIUsage
+//file:noinspection DependencyNotationArgument
 plugins {
     id 'com.android.application'
     id 'kotlin-android'
@@ -71,8 +73,16 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled true
+            // 调试模式开关
+            debuggable false
+            jniDebuggable false
+            // 压缩对齐开关
+            zipAlignEnabled true
+            // 移除无用的资源
             shrinkResources true
+            // 代码混淆开关
+            minifyEnabled true
+            // 混淆配置
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             if (isNeedPackage.toBoolean()) {
                 signingConfig signingConfigs.release
@@ -94,8 +104,16 @@ android {
             }
         }
         debug {
-            minifyEnabled true
+            // 调试模式开关
+            debuggable true
+            jniDebuggable true
+            // 压缩对齐开关
+            zipAlignEnabled true
+            // 移除无用的资源
             shrinkResources true
+            // 代码混淆开关
+            minifyEnabled true
+            // 混淆配置
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             if (isNeedPackage.toBoolean()) {
                 signingConfig signingConfigs.release
@@ -116,13 +134,6 @@ android {
                 buildConfigField "String", "APP_ID_UMENG", '"60254fc7425ec25f10f4293e"'
             }
         }
-        /*debug {
-            debuggable true
-            minifyEnabled false
-
-            signingConfig signingConfigs.debug
-            buildConfigField "String", "APP_ID_UMENG", '"60254fc7425ec25f10f4293e"'
-        }*/
     }
 
     //ABI配置——按CPU架构分别打包
@@ -137,7 +148,7 @@ android {
     def abiCodes = ['universal': 1, 'armeabi-v7a': 2, 'arm64-v8a': 3, 'x86': 4, 'x86_64': 5]
     packagingOptions {
         //去除FrpcLib的so，用时下载并动态加载
-        if (isNeedPackage.toBoolean()) {
+        if (excludeFrpclib.toBoolean()) {
             exclude 'lib/armeabi-v7a/libgojni.so'
             exclude 'lib/arm64-v8a/libgojni.so'
             exclude 'lib/x86/libgojni.so'
@@ -149,19 +160,24 @@ android {
             excludes += ['META-INF/DEPENDENCIES.txt', 'META-INF/LICENSE.txt', 'META-INF/NOTICE.txt', 'META-INF/NOTICE', 'META-INF/LICENSE', 'META-INF/DEPENDENCIES', 'META-INF/notice.txt', 'META-INF/license.txt', 'META-INF/dependencies.txt', 'META-INF/LGPL2.1']
         }
     }
-    android.applicationVariants.all { variant ->
+
+    android.applicationVariants.configureEach { variant ->
         // Assigns a different version code for each output APK.
-        variant.outputs.each {
-            output ->
-                def date = new Date().format("yyyyMMdd", TimeZone.getTimeZone("GMT+08"))
-                //noinspection GrDeprecatedAPIUsage
-                def abiName = output.getFilter(com.android.build.OutputFile.ABI)
-                if (abiName == null) abiName = "universal"
-                output.versionCodeOverride = abiCodes.get(abiName, 0) * 100000 + variant.versionCode
-                output.outputFileName = "SmsForwarder_${variant.name}_${versionName}_${output.versionCode}_${date}_${abiName}.apk"
+        variant.outputs.each { output ->
+            def date = new Date().format("yyyyMMdd", TimeZone.getTimeZone("GMT+08"))
+            //noinspection GrDeprecatedAPIUsage
+            def abiName = output.getFilter(com.android.build.OutputFile.ABI)
+            if (abiName == null) abiName = "universal"
+            output.versionCodeOverride = abiCodes.get(abiName, 0) * 100000 + variant.versionCode
+            output.outputFileName = "SmsF_${versionName}_${output.versionCode}_${abiName}_${date}_${variant.name}.apk"
         }
     }
 
+    bundle {
+        language {
+            enableSplit = false
+        }
+    }
 
     sourceSets {
         main {
@@ -180,16 +196,24 @@ dependencies {
     //frpc
     implementation files('libs/frpclib.aar')
 
+    //kmnkt基于Kotlin Multiplatform的跨平台socket通信统一接口，支持UDP/TCP/MQTT协议
+    //https://github.com/xuankaicat/kmnkt
+    implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
+    //implementation files('libs/socket-2.0.0-alpha06-2.aar')
+
     testImplementation deps.junit
-    androidTestImplementation 'androidx.test.ext:junit:1.1.3'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation deps.espresso.core
 
+    //noinspection GradleDependency
     implementation 'androidx.core:core-ktx:1.9.0'
-    implementation "androidx.activity:activity-ktx:1.6.0"
-    implementation "androidx.fragment:fragment-ktx:1.5.3"
+    //noinspection GradleDependency
+    implementation 'androidx.activity:activity-ktx:1.6.1'
+    //noinspection GradleDependency
+    implementation 'androidx.fragment:fragment-ktx:1.5.5'
     implementation "androidx.cardview:cardview:1.0.0"
-    implementation 'androidx.appcompat:appcompat:1.5.1'
-    implementation 'androidx.preference:preference-ktx:1.2.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.preference:preference-ktx:1.2.1'
 
     //分包
     implementation deps.androidx.multidex
@@ -202,13 +226,11 @@ dependencies {
     //WebView
     implementation 'com.github.xuexiangjys.AgentWeb:agentweb-core:1.0.0'
     implementation 'com.github.xuexiangjys.AgentWeb:agentweb-download:1.0.0'//选填
-    //腾讯的键值对存储mmkv：https://github.com/Tencent/MMKV
-    implementation 'com.tencent:mmkv:1.2.14'
     //屏幕适配AutoSize：https://github.com/JessYanCoding/AndroidAutoSize
     implementation 'me.jessyan:autosize:1.2.1'
     //umeng统计
-    implementation 'com.umeng.umsdk:common:9.5.2'
-    implementation 'com.umeng.umsdk:asms:1.6.3'
+    implementation 'com.umeng.umsdk:common:9.6.5'
+    implementation 'com.umeng.umsdk:asms:1.8.0'
 
     //预加载占位控件
     implementation 'me.samlss:broccoli:1.0.0'
@@ -219,26 +241,34 @@ dependencies {
     //美团多渠道打包
     //implementation 'com.meituan.android.walle:library:1.1.6'
 
-    api("androidx.work:work-multiprocess:2.7.1")
-    api("androidx.work:work-runtime-ktx:2.7.1")
+    def work_version = '2.8.1'
+    //noinspection GradleDependency
+    api("androidx.work:work-multiprocess:$work_version")
+    //noinspection GradleDependency
+    api("androidx.work:work-runtime-ktx:$work_version")
 
     //Android Room
-    def room_version = '2.4.3'
+    def room_version = '2.5.2'
+    //noinspection GradleDependency
     implementation "androidx.room:room-ktx:$room_version"
+    //noinspection GradleDependency
     implementation "androidx.room:room-runtime:$room_version"
+    //noinspection GradleDependency
     implementation "androidx.room:room-paging:$room_version"
+    //noinspection GradleDependency
     implementation "androidx.room:room-rxjava2:$room_version"
+    //noinspection KaptUsageInsteadOfKsp
     kapt "androidx.room:room-compiler:$room_version"
 
     //CodeView：https://github.com/AmrDeveloper/CodeView
-    implementation 'com.github.AmrDeveloper:CodeView:1.3.5'
+    implementation 'io.github.amrdeveloper:codeview:1.3.8'
 
     //LiveEventBus：https://github.com/JeremyLiao/LiveEventBus
     implementation 'io.github.jeremyliao:live-event-bus-x:1.8.0'
 
     //MarkdownView：https://github.com/tiagohm/MarkdownView
     implementation 'com.github.tiagohm.MarkdownView:library:0.19.0'
-    implementation 'com.github.tiagohm.MarkdownView:emoji:0.19.0'
+    //implementation 'com.github.tiagohm.MarkdownView:emoji:0.19.0'
 
     def retrofit2_version = '2.9.0'
     implementation "com.squareup.retrofit2:retrofit:$retrofit2_version"
@@ -246,12 +276,16 @@ dependencies {
     implementation "com.squareup.retrofit2:adapter-rxjava2:$retrofit2_version"
 
     def paging_version = "3.1.1"
+    //noinspection GradleDependency
     implementation "androidx.paging:paging-runtime-ktx:$paging_version"
     // alternatively - without Android dependencies for tests
+    //noinspection GradleDependency
     testImplementation "androidx.paging:paging-common-ktx:$paging_version"
 
     //权限请求框架：https://github.com/getActivity/XXPermissions
-    implementation 'com.github.getActivity:XXPermissions:16.2'
+    implementation 'com.github.getActivity:XXPermissions:18.5'
+    //语种切换框架：https://github.com/getActivity/MultiLanguages
+    implementation 'com.github.getActivity:MultiLanguages:9.3'
 
     def mail_version = '1.6.7'
     implementation "com.sun.mail:android-mail:$mail_version"
@@ -262,15 +296,31 @@ dependencies {
     implementation 'com.gyf.cactus:cactus:1.1.3-beta13'
 
     //HTTP服务器：https://github.com/yanzhenjie/AndServer
-    implementation 'cn.ppps.andserver:api:2.1.11'
-    kapt 'cn.ppps.andserver:processor:2.1.11'
+    implementation 'cn.ppps.andserver:api:2.1.12'
+    kapt 'cn.ppps.andserver:processor:2.1.12'
 
     //国密算法SM4 的JAVA实现(基于BC实现)
-    api "org.bouncycastle:bcprov-jdk15on:1.69"
+    api 'org.bouncycastle:bcprov-jdk15on:1.70'
+
+    //Location 是一个通过 Android 自带的 LocationManager 来实现的定位功能：https://github.com/jenly1314/Location
+    implementation 'com.github.pppscn:location:1.0.0'
+
+    //crontab解析库：https://github.com/jmrozanec/cron-utils 官网：http://cron-parser.com
+    //implementation 'com.cronutils:cron-utils:9.2.1'
+    //JSR-310 backport for Android：https://github.com/JakeWharton/ThreeTenABP
+    //implementation 'com.jakewharton.threetenabp:threetenabp:1.4.6'
+
+    //Partial implementation of Quartz Cron Java for Android: https://github.com/gatewayapps/crondroid
+    implementation 'gatewayapps.crondroid:crondroid:1.0.0'
+    //Java Parser For Cron Expressions: https://github.com/grahamar/cron-parser
+    implementation 'net.redhogs.cronparser:cron-parser-core:3.5'
+
+    //侧边栏菜单：https://github.com/yarolegovich/SlidingRootNav
+    implementation 'com.yarolegovich:sliding-root-nav:1.1.1'
+    //TabBar：https://github.com/xuexiangjys/JPTabBar
+    // implementation 'com.github.xuexiangjys:JPTabBar:1.0.1'
 }
 //自动添加X-Library依赖
 apply from: 'x-library.gradle'
 //walle多渠道打包
 //apply from: 'multiple-channel.gradle'
-
-

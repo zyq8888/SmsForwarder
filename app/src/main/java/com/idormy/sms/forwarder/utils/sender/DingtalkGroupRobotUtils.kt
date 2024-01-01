@@ -2,7 +2,7 @@ package com.idormy.sms.forwarder.utils.sender
 
 import android.text.TextUtils
 import android.util.Base64
-import android.util.Log
+import com.idormy.sms.forwarder.utils.Log
 import com.google.gson.Gson
 import com.idormy.sms.forwarder.database.entity.Rule
 import com.idormy.sms.forwarder.entity.MsgInfo
@@ -20,7 +20,6 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
 //钉钉群自定义机器人
-@Suppress("PrivatePropertyName", "UNUSED_PARAMETER")
 class DingtalkGroupRobotUtils private constructor() {
     companion object {
 
@@ -29,13 +28,15 @@ class DingtalkGroupRobotUtils private constructor() {
         fun sendMsg(
             setting: DingtalkGroupRobotSetting,
             msgInfo: MsgInfo,
-            rule: Rule?,
-            logId: Long?,
+            rule: Rule? = null,
+            senderIndex: Int = 0,
+            logId: Long = 0L,
+            msgId: Long = 0L
         ) {
-            val content: String = if (rule != null) {
+            var content: String = if (rule != null) {
                 msgInfo.getContentForSend(rule.smsTemplate, rule.regexReplace)
             } else {
-                msgInfo.getContentForSend(SettingUtils.smsTemplate.toString())
+                msgInfo.getContentForSend(SettingUtils.smsTemplate)
             }
 
             var requestUrl = if (setting.token.startsWith("http")) setting.token else "https://oapi.dingtalk.com/robot/send?access_token=" + setting.token
@@ -53,11 +54,7 @@ class DingtalkGroupRobotUtils private constructor() {
             Log.i(TAG, "requestUrl:$requestUrl")
 
             val msgMap: MutableMap<String, Any> = mutableMapOf()
-            msgMap["msgtype"] = "text"
-
-            val textText: MutableMap<String, Any> = mutableMapOf()
-            textText["content"] = content
-            msgMap["text"] = textText
+            msgMap["msgtype"] = setting.msgtype ?: "text"
 
             val atMap: MutableMap<String, Any> = mutableMapOf()
             msgMap["at"] = atMap
@@ -68,17 +65,33 @@ class DingtalkGroupRobotUtils private constructor() {
                 if (!TextUtils.isEmpty(setting.atMobiles)) {
                     val atMobilesArray: Array<String> = setting.atMobiles.toString().replace("[,，;；]".toRegex(), ",").trim(',').split(',').toTypedArray()
                     if (atMobilesArray.isNotEmpty()) {
-                        val atMobilesList: MutableList<String> = ArrayList()
+                        atMap["atMobiles"] = atMobilesArray
                         for (atMobile in atMobilesArray) {
-                            if (TextUtils.isDigitsOnly(atMobile)) {
-                                atMobilesList.add(atMobile)
+                            if (!content.contains("@${atMobile}")) {
+                                content += " @${atMobile}"
                             }
-                        }
-                        if (atMobilesList.isNotEmpty()) {
-                            atMap["atMobiles"] = atMobilesList
                         }
                     }
                 }
+                if (!TextUtils.isEmpty(setting.atDingtalkIds)) {
+                    val atDingtalkIdsArray: Array<String> = setting.atDingtalkIds.toString().replace("[,，;；]".toRegex(), ",").trim(',').split(',').toTypedArray()
+                    if (atDingtalkIdsArray.isNotEmpty()) {
+                        atMap["atDingtalkIds"] = atDingtalkIdsArray
+                        for (atDingtalkId in atDingtalkIdsArray) {
+                            if (!content.contains("@${atDingtalkId}")) {
+                                content += " @${atDingtalkId}"
+                            }
+                        }
+                    }
+                }
+            }
+
+            if ("markdown" == msgMap["msgtype"]) {
+                val titleTemplate = setting.titleTemplate.toString()
+                val title = rule?.let { msgInfo.getTitleForSend(titleTemplate, it.regexReplace) } ?: msgInfo.getTitleForSend(titleTemplate)
+                msgMap["markdown"] = mutableMapOf<String, Any>("title" to title, "text" to content)
+            } else {
+                msgMap["text"] = mutableMapOf<String, Any>("content" to content)
             }
 
             val requestMsg: String = Gson().toJson(msgMap)
@@ -97,26 +110,23 @@ class DingtalkGroupRobotUtils private constructor() {
 
                     override fun onError(e: ApiException) {
                         Log.e(TAG, e.detailMessage)
-                        SendUtils.updateLogs(logId, 0, e.displayMessage)
+                        val status = 0
+                        SendUtils.updateLogs(logId, status, e.displayMessage)
+                        SendUtils.senderLogic(status, msgInfo, rule, senderIndex, msgId)
                     }
 
                     override fun onSuccess(response: String) {
                         Log.i(TAG, response)
 
                         val resp = Gson().fromJson(response, DingtalkResult::class.java)
-                        if (resp?.errcode == 0L) {
-                            SendUtils.updateLogs(logId, 2, response)
-                        } else {
-                            SendUtils.updateLogs(logId, 0, response)
-                        }
+                        val status = if (resp?.errcode == 0L) 2 else 0
+                        SendUtils.updateLogs(logId, status, response)
+                        SendUtils.senderLogic(status, msgInfo, rule, senderIndex, msgId)
                     }
 
                 })
 
         }
 
-        fun sendMsg(setting: DingtalkGroupRobotSetting, msgInfo: MsgInfo) {
-            sendMsg(setting, msgInfo, null, null)
-        }
     }
 }

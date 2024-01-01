@@ -1,6 +1,6 @@
 package com.idormy.sms.forwarder.utils.sender
 
-import android.util.Log
+import com.idormy.sms.forwarder.utils.Log
 import com.google.gson.Gson
 import com.idormy.sms.forwarder.database.entity.Rule
 import com.idormy.sms.forwarder.entity.MsgInfo
@@ -13,7 +13,6 @@ import com.xuexiang.xhttp2.cache.model.CacheMode
 import com.xuexiang.xhttp2.callback.SimpleCallBack
 import com.xuexiang.xhttp2.exception.ApiException
 
-@Suppress("PrivatePropertyName", "UNUSED_PARAMETER", "unused")
 class GotifyUtils {
     companion object {
 
@@ -22,8 +21,10 @@ class GotifyUtils {
         fun sendMsg(
             setting: GotifySetting,
             msgInfo: MsgInfo,
-            rule: Rule?,
-            logId: Long?,
+            rule: Rule? = null,
+            senderIndex: Int = 0,
+            logId: Long = 0L,
+            msgId: Long = 0L
         ) {
             val title: String = if (rule != null) {
                 msgInfo.getTitleForSend(setting.title.toString(), rule.regexReplace)
@@ -33,7 +34,7 @@ class GotifyUtils {
             val content: String = if (rule != null) {
                 msgInfo.getContentForSend(rule.smsTemplate, rule.regexReplace)
             } else {
-                msgInfo.getContentForSend(SettingUtils.smsTemplate.toString())
+                msgInfo.getContentForSend(SettingUtils.smsTemplate)
             }
 
             val requestUrl: String = setting.webServer //推送地址
@@ -64,26 +65,23 @@ class GotifyUtils {
 
                     override fun onError(e: ApiException) {
                         Log.e(TAG, e.detailMessage)
-                        SendUtils.updateLogs(logId, 0, e.displayMessage)
+                        val status = 0
+                        SendUtils.updateLogs(logId, status, e.displayMessage)
+                        SendUtils.senderLogic(status, msgInfo, rule, senderIndex, msgId)
                     }
 
                     override fun onSuccess(response: String) {
                         Log.i(TAG, response)
 
                         val resp = Gson().fromJson(response, GotifyResult::class.java)
-                        if (resp?.id != null) {
-                            SendUtils.updateLogs(logId, 2, response)
-                        } else {
-                            SendUtils.updateLogs(logId, 0, response)
-                        }
+                        val status = if (resp?.id != null) 2 else 0
+                        SendUtils.updateLogs(logId, status, response)
+                        SendUtils.senderLogic(status, msgInfo, rule, senderIndex, msgId)
                     }
 
                 })
 
         }
 
-        fun sendMsg(setting: GotifySetting, msgInfo: MsgInfo) {
-            sendMsg(setting, msgInfo, null, null)
-        }
     }
 }

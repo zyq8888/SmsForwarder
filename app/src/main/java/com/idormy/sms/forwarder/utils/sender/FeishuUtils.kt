@@ -1,7 +1,7 @@
 package com.idormy.sms.forwarder.utils.sender
 
 import android.util.Base64
-import android.util.Log
+import com.idormy.sms.forwarder.utils.Log
 import com.google.gson.Gson
 import com.idormy.sms.forwarder.database.entity.Rule
 import com.idormy.sms.forwarder.entity.MsgInfo
@@ -19,7 +19,6 @@ import java.util.*
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-@Suppress("PrivatePropertyName", "UNUSED_PARAMETER")
 class FeishuUtils private constructor() {
     companion object {
 
@@ -82,8 +81,10 @@ class FeishuUtils private constructor() {
         fun sendMsg(
             setting: FeishuSetting,
             msgInfo: MsgInfo,
-            rule: Rule?,
-            logId: Long?,
+            rule: Rule? = null,
+            senderIndex: Int = 0,
+            logId: Long = 0L,
+            msgId: Long = 0L
         ) {
             val from: String = msgInfo.from
             val title: String = if (rule != null) {
@@ -94,7 +95,7 @@ class FeishuUtils private constructor() {
             val content: String = if (rule != null) {
                 msgInfo.getContentForSend(rule.smsTemplate, rule.regexReplace)
             } else {
-                msgInfo.getContentForSend(SettingUtils.smsTemplate.toString())
+                msgInfo.getContentForSend(SettingUtils.smsTemplate)
             }
 
             val requestUrl = setting.webhook
@@ -144,18 +145,18 @@ class FeishuUtils private constructor() {
 
                     override fun onError(e: ApiException) {
                         Log.e(TAG, e.detailMessage)
-                        SendUtils.updateLogs(logId, 0, e.displayMessage)
+                        val status = 0
+                        SendUtils.updateLogs(logId, status, e.displayMessage)
+                        SendUtils.senderLogic(status, msgInfo, rule, senderIndex, msgId)
                     }
 
                     override fun onSuccess(response: String) {
                         Log.i(TAG, response)
 
                         val resp = Gson().fromJson(response, FeishuResult::class.java)
-                        if (resp?.code == 0L) {
-                            SendUtils.updateLogs(logId, 2, response)
-                        } else {
-                            SendUtils.updateLogs(logId, 0, response)
-                        }
+                        val status = if (resp?.code == 0L) 2 else 0
+                        SendUtils.updateLogs(logId, status, response)
+                        SendUtils.senderLogic(status, msgInfo, rule, senderIndex, msgId)
                     }
 
                 })
@@ -180,8 +181,5 @@ class FeishuUtils private constructor() {
             return if (jsonStr.length >= 2) jsonStr.substring(1, jsonStr.length - 1) else jsonStr
         }
 
-        fun sendMsg(setting: FeishuSetting, msgInfo: MsgInfo) {
-            sendMsg(setting, msgInfo, null, null)
-        }
     }
 }

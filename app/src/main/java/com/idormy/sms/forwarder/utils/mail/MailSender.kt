@@ -1,6 +1,6 @@
 package com.idormy.sms.forwarder.utils.mail
 
-import android.util.Log
+import com.idormy.sms.forwarder.utils.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
@@ -22,10 +22,12 @@ object MailSender {
      * 发送邮件
      */
     fun sendMail(mail: Mail, onMailSendListener: OnMailSendListener? = null) {
+        @Suppress("OPT_IN_USAGE")
         val send = GlobalScope.async(Dispatchers.IO) {
             Transport.send(MailUtil.createMailMessage(mail))
         }
 
+        @Suppress("OPT_IN_USAGE")
         GlobalScope.launch(Dispatchers.Main) {
             runCatching {
                 send.await()
