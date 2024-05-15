@@ -4,11 +4,12 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.BatteryManager
-import com.idormy.sms.forwarder.utils.Log
+import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.idormy.sms.forwarder.utils.BatteryUtils
+import com.idormy.sms.forwarder.utils.Log
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_BATTERY
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_CHARGE
 import com.idormy.sms.forwarder.utils.TaskWorker
@@ -50,7 +51,7 @@ class BatteryReceiver : BroadcastReceiver() {
             Log.d(TAG, "电量改变")
             val request = OneTimeWorkRequestBuilder<BatteryWorker>().setInputData(
                 workDataOf(
-                    TaskWorker.conditionType to TASK_CONDITION_BATTERY,
+                    TaskWorker.CONDITION_TYPE to TASK_CONDITION_BATTERY,
                     "status" to statusNew,
                     "level_new" to levelNew,
                     "level_old" to levelOld,
@@ -62,16 +63,26 @@ class BatteryReceiver : BroadcastReceiver() {
         //充电状态改变
         if (isPluggedChanged || isStatusChanged) {
             Log.d(TAG, "充电状态改变")
-            val request = OneTimeWorkRequestBuilder<BatteryWorker>().setInputData(
-                workDataOf(
-                    TaskWorker.conditionType to TASK_CONDITION_CHARGE,
-                    "status_new" to statusNew,
-                    "status_old" to statusOld,
-                    "plugged_new" to pluggedNew,
-                    "plugged_old" to pluggedOld,
-                )
-            ).build()
-            WorkManager.getInstance(context).enqueue(request)
+            val inputData = workDataOf(
+                TaskWorker.CONDITION_TYPE to TASK_CONDITION_CHARGE,
+                "status_new" to statusNew,
+                "status_old" to statusOld,
+                "plugged_new" to pluggedNew,
+                "plugged_old" to pluggedOld,
+            )
+            // 使用 hashcode 生成唯一的标识符
+            val inputDataHash = inputData.hashCode().toString()
+            // 检查是否已经存在具有相同输入数据的工作
+            val existingWorkPolicy = if (WorkManager.getInstance(context).getWorkInfosByTag(inputDataHash).get().isEmpty()) {
+                ExistingWorkPolicy.REPLACE
+            } else {
+                ExistingWorkPolicy.KEEP
+            }
+            val request = OneTimeWorkRequestBuilder<BatteryWorker>()
+                .setInputData(inputData)
+                .addTag(inputDataHash)
+                .build()
+            WorkManager.getInstance(context).enqueueUniqueWork(inputDataHash, existingWorkPolicy, request)
         }
 
     }

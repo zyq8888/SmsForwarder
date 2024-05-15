@@ -8,7 +8,6 @@
     android:orientation="vertical"
     tools:ignore="TooManyViews">
 
-
     <androidx.core.widget.NestedScrollView style="@style/ScrollViewStyle">
 
         <LinearLayout
@@ -87,13 +86,13 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="@string/forward_missed_calls"
+                        android:text="@string/forward_calls"
                         android:textStyle="bold" />
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="@string/forward_missed_calls_tips"
+                        android:text="@string/forward_calls_tips"
                         android:textSize="@dimen/text_size_mini"
                         tools:ignore="SmallSp" />
 
@@ -240,7 +239,7 @@
                     style="@style/SwitchButtonStyle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    tools:ignore="TouchTargetSizeCheck" />
+                    tools:ignore="TouchTargetSizeCheck,DuplicateSpeakableTextCheck" />
 
             </LinearLayout>
 
@@ -366,6 +365,118 @@
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
+                            android:text="@string/enable_bluetooth"
+                            android:textStyle="bold"
+                            tools:ignore="RelativeOverlap" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/enable_bluetooth_tips"
+                            android:textSize="@dimen/text_size_mini"
+                            tools:ignore="SmallSp" />
+
+                    </LinearLayout>
+
+                    <com.xuexiang.xui.widget.button.switchbutton.SwitchButton
+                        android:id="@+id/sb_enable_bluetooth"
+                        style="@style/SwitchButtonStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        tools:ignore="TouchTargetSizeCheck,DuplicateSpeakableTextCheck" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/layout_bluetooth_setting"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:orientation="vertical">
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="?attr/xui_config_color_separator_light" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="5dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="5dp"
+                            android:text="@string/scan_interval"
+                            android:textSize="@dimen/text_size_small"
+                            android:textStyle="bold" />
+
+                        <com.xuexiang.xui.widget.picker.XSeekBar
+                            android:id="@+id/xsb_scan_interval"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="5dp"
+                            android:layout_weight="1"
+                            android:padding="0dp"
+                            app:xsb_max="120"
+                            app:xsb_min="1" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="5dp"
+                            android:text="@string/seconds"
+                            android:textSize="@dimen/text_size_small"
+                            android:textStyle="bold" />
+
+                        <com.xuexiang.xui.widget.button.SmoothCheckBox
+                            android:id="@+id/scb_ignore_anonymous"
+                            android:layout_width="15dp"
+                            android:layout_height="15dp"
+                            android:layout_marginStart="@dimen/config_margin_10dp"
+                            app:scb_color_checked="@color/colorPrimary"
+                            tools:ignore="SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="2dp"
+                            android:singleLine="true"
+                            android:text="@string/ignore_anonymous"
+                            android:textSize="@dimen/text_size_small"
+                            tools:ignore="SmallSp" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <LinearLayout
+                style="@style/BarStyle.Switch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
                             android:text="@string/enable_location"
                             android:textStyle="bold"
                             tools:ignore="RelativeOverlap" />
@@ -384,7 +495,7 @@
                         style="@style/SwitchButtonStyle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        tools:ignore="TouchTargetSizeCheck" />
+                        tools:ignore="TouchTargetSizeCheck,DuplicateSpeakableTextCheck" />
 
                 </LinearLayout>
 
@@ -393,8 +504,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="5dp"
-                    android:orientation="vertical"
-                    android:visibility="gone">
+                    android:orientation="vertical">
 
                     <View
                         android:layout_width="match_parent"
@@ -502,65 +612,86 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/min_interval"
+                            android:text="@string/location_update"
                             android:textSize="@dimen/text_size_small"
                             android:textStyle="bold"
                             tools:ignore="SmallSp" />
 
-                        <EditText
-                            android:id="@+id/et_min_interval"
+                        <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="5dp"
                             android:layout_weight="1"
-                            android:digits="0123456789"
-                            android:importantForAutofill="no"
-                            android:inputType="number"
-                            android:paddingTop="0dp"
-                            android:paddingBottom="3dp"
-                            android:singleLine="true"
-                            android:textAlignment="center"
-                            tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                            android:orientation="vertical">
 
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="5dp"
-                            android:text="@string/seconds"
-                            android:textSize="@dimen/text_size_small"
-                            android:textStyle="bold" />
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
 
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="@dimen/config_margin_10dp"
-                            android:text="@string/min_distance"
-                            android:textSize="@dimen/text_size_small"
-                            android:textStyle="bold"
-                            tools:ignore="SmallSp" />
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="5dp"
+                                    android:text="@string/min_interval"
+                                    android:textSize="@dimen/text_size_small"
+                                    android:textStyle="bold" />
 
-                        <EditText
-                            android:id="@+id/et_min_distance"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="5dp"
-                            android:layout_weight="1"
-                            android:digits="0123456789"
-                            android:importantForAutofill="no"
-                            android:inputType="number"
-                            android:paddingTop="0dp"
-                            android:paddingBottom="3dp"
-                            android:singleLine="true"
-                            android:textAlignment="center"
-                            tools:ignore="LabelFor,SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+                                <com.xuexiang.xui.widget.picker.XSeekBar
+                                    android:id="@+id/xsb_min_interval"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="5dp"
+                                    android:layout_weight="1"
+                                    android:padding="0dp"
+                                    app:xsb_max="120"
+                                    app:xsb_min="1" />
 
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="5dp"
-                            android:text="@string/meter"
-                            android:textSize="@dimen/text_size_small"
-                            android:textStyle="bold" />
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="5dp"
+                                    android:text="@string/seconds"
+                                    android:textSize="@dimen/text_size_small"
+                                    android:textStyle="bold" />
+
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="5dp"
+                                    android:text="@string/min_distance"
+                                    android:textSize="@dimen/text_size_small"
+                                    android:textStyle="bold" />
+
+                                <com.xuexiang.xui.widget.picker.XSeekBar
+                                    android:id="@+id/xsb_min_distance"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="5dp"
+                                    android:layout_weight="1"
+                                    android:padding="0dp"
+                                    app:xsb_max="100"
+                                    app:xsb_min="1" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="5dp"
+                                    android:text="@string/meter"
+                                    android:textSize="@dimen/text_size_small"
+                                    android:textStyle="bold" />
+
+                            </LinearLayout>
+
+                        </LinearLayout>
 
                     </LinearLayout>
 
@@ -662,7 +793,6 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:checked="true"
                             android:text="@string/user_app"
                             android:textSize="@dimen/text_size_small"
                             tools:ignore="SmallSp" />
@@ -808,16 +938,17 @@
             </LinearLayout>
 
             <LinearLayout
-                style="@style/BarStyle.Switch"
+                style="@style/BarStyle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:orientation="vertical"
                 tools:ignore="RtlSymmetry">
 
                 <LinearLayout
-                    android:layout_width="180dp"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    tools:ignore="TextSizeCheck">
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
 
                     <TextView
                         android:layout_width="wrap_content"
@@ -827,37 +958,63 @@
                         tools:ignore="RelativeOverlap" />
 
                     <TextView
+                        android:id="@+id/tv_silent_period"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="5dp"
+                        android:layout_weight="1"
+                        android:gravity="center" />
+
+                    <com.xuexiang.xui.widget.button.shadowbutton.RippleShadowShadowButton
+                        android:id="@+id/btn_silent_period"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginStart="5dp"
+                        android:gravity="center"
+                        android:padding="3dp"
+                        android:text="@string/select"
+                        android:textColor="@color/white"
+                        android:textSize="@dimen/text_size_mini"
+                        app:sb_color_unpressed="@color/colorPrimary"
+                        app:sb_ripple_color="@color/white"
+                        app:sb_ripple_duration="500"
+                        app:sb_shape_type="rectangle"
+                        tools:ignore="PrivateResource,SmallSp" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
                         android:text="@string/silent_time_period_tips"
                         android:textSize="@dimen/text_size_mini"
                         tools:ignore="SmallSp" />
 
+                    <com.xuexiang.xui.widget.button.SmoothCheckBox
+                        android:id="@+id/scb_silent_period_logs"
+                        android:layout_width="15dp"
+                        android:layout_height="15dp"
+                        android:layout_marginStart="@dimen/config_margin_10dp"
+                        app:scb_color_checked="@color/colorPrimary"
+                        tools:ignore="SpeakableTextPresentCheck,TouchTargetSizeCheck" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="2dp"
+                        android:singleLine="true"
+                        android:text="@string/silent_time_period_logs"
+                        android:textSize="@dimen/text_size_small"
+                        tools:ignore="SmallSp" />
+
                 </LinearLayout>
-
-                <TextView
-                    android:id="@+id/tv_silent_period"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="5dp"
-                    android:layout_weight="1"
-                    android:gravity="center" />
-
-                <com.xuexiang.xui.widget.button.shadowbutton.RippleShadowShadowButton
-                    android:id="@+id/btn_silent_period"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="5dp"
-                    android:gravity="center"
-                    android:padding="5dp"
-                    android:text="@string/select"
-                    android:textColor="@color/white"
-                    android:textSize="@dimen/text_size_small"
-                    app:sb_color_unpressed="@color/colorPrimary"
-                    app:sb_ripple_color="@color/white"
-                    app:sb_ripple_duration="500"
-                    app:sb_shape_type="rectangle"
-                    tools:ignore="SmallSp,TextContrastCheck,TouchTargetSizeCheck" />
 
             </LinearLayout>
 
@@ -990,6 +1147,67 @@
             <LinearLayout
                 style="@style/BarStyle.Switch"
                 android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/enable_accessibility_service"
+                            android:textStyle="bold"
+                            tools:ignore="RelativeOverlap" />
+
+                        <com.xuexiang.xui.widget.button.shadowbutton.RippleShadowShadowButton
+                            android:id="@+id/btn_option"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="5dp"
+                            android:gravity="center"
+                            android:padding="3dp"
+                            android:text="@string/display_floating_controls"
+                            android:textColor="@color/white"
+                            android:textSize="@dimen/text_size_mini"
+                            app:sb_color_unpressed="@color/colorPrimary"
+                            app:sb_ripple_color="@color/white"
+                            app:sb_ripple_duration="500"
+                            app:sb_shape_type="rectangle"
+                            tools:ignore="PrivateResource,SmallSp,TextContrastCheck,TouchTargetSizeCheck" />
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/assists_description"
+                        android:textSize="@dimen/text_size_mini"
+                        tools:ignore="SmallSp" />
+
+                </LinearLayout>
+
+                <com.xuexiang.xui.widget.button.switchbutton.SwitchButton
+                    android:id="@+id/sb_enable_accessibility_service"
+                    style="@style/SwitchButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    tools:ignore="TouchTargetSizeCheck" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                style="@style/BarStyle.Switch"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content">
 
                 <LinearLayout
@@ -1077,7 +1295,7 @@
             </LinearLayout>
 
             <LinearLayout
-                style="@style/BarStyle.Switch"
+                style="@style/BarStyle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:baselineAligned="false"
@@ -1237,7 +1455,7 @@
             </LinearLayout>
 
             <LinearLayout
-                style="@style/BarStyle.Switch"
+                style="@style/BarStyle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 tools:ignore="RtlSymmetry">
@@ -1275,7 +1493,7 @@
             </LinearLayout>
 
             <LinearLayout
-                style="@style/BarStyle.Switch"
+                style="@style/BarStyle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
@@ -1349,7 +1567,7 @@
             </LinearLayout>
 
             <LinearLayout
-                style="@style/BarStyle.Switch"
+                style="@style/BarStyle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
@@ -1455,6 +1673,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:gravity="center_vertical"
                     android:orientation="vertical">
 
                     <TextView
@@ -1598,7 +1817,8 @@
             <LinearLayout
                 style="@style/BarStyle.Switch"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content">
+                android:layout_height="wrap_content"
+                android:visibility="gone">
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -1701,6 +1921,7 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
                     android:orientation="horizontal">
 
                     <TextView

@@ -82,58 +82,86 @@ class TasksEditFragment : BaseFragment<FragmentTasksEditBinding?>(), View.OnClic
         PageInfo(
             getString(R.string.task_cron),
             "com.idormy.sms.forwarder.fragment.condition.CronFragment",
-            "{\"\":\"\"}",
+            "",
             CoreAnim.slide,
             R.drawable.auto_task_icon_custom_time,
         ),
         PageInfo(
             getString(R.string.task_to_address),
             "com.idormy.sms.forwarder.fragment.condition.ToAddressFragment",
-            "{\"\":\"\"}",
+            "",
             CoreAnim.slide,
             R.drawable.auto_task_icon_to_address,
         ),
         PageInfo(
             getString(R.string.task_leave_address),
             "com.idormy.sms.forwarder.fragment.condition.LeaveAddressFragment",
-            "{\"\":\"\"}",
+            "",
             CoreAnim.slide,
             R.drawable.auto_task_icon_leave_address,
         ),
         PageInfo(
             getString(R.string.task_network),
             "com.idormy.sms.forwarder.fragment.condition.NetworkFragment",
-            "{\"\":\"\"}",
+            "",
             CoreAnim.slide,
             R.drawable.auto_task_icon_network
         ),
         PageInfo(
             getString(R.string.task_sim),
             "com.idormy.sms.forwarder.fragment.condition.SimFragment",
-            "{\"\":\"\"}",
+            "",
             CoreAnim.slide,
             R.drawable.auto_task_icon_sim
         ),
         PageInfo(
             getString(R.string.task_battery),
             "com.idormy.sms.forwarder.fragment.condition.BatteryFragment",
-            "{\"\":\"\"}",
+            "",
             CoreAnim.slide,
             R.drawable.auto_task_icon_battery
         ),
         PageInfo(
             getString(R.string.task_charge),
             "com.idormy.sms.forwarder.fragment.condition.ChargeFragment",
-            "{\"\":\"\"}",
+            "",
             CoreAnim.slide,
             R.drawable.auto_task_icon_charge
         ),
         PageInfo(
             getString(R.string.task_lock_screen),
             "com.idormy.sms.forwarder.fragment.condition.LockScreenFragment",
-            "{\"\":\"\"}",
+            "",
             CoreAnim.slide,
             R.drawable.auto_task_icon_lock_screen
+        ),
+        PageInfo(
+            getString(R.string.task_sms),
+            "com.idormy.sms.forwarder.fragment.condition.MsgFragment",
+            "sms",
+            CoreAnim.slide,
+            R.drawable.auto_task_icon_sms
+        ),
+        PageInfo(
+            getString(R.string.task_call),
+            "com.idormy.sms.forwarder.fragment.condition.MsgFragment",
+            "call",
+            CoreAnim.slide,
+            R.drawable.auto_task_icon_incall
+        ),
+        PageInfo(
+            getString(R.string.task_app),
+            "com.idormy.sms.forwarder.fragment.condition.MsgFragment",
+            "app",
+            CoreAnim.slide,
+            R.drawable.auto_task_icon_start_activity
+        ),
+        PageInfo(
+            getString(R.string.task_bluetooth),
+            "com.idormy.sms.forwarder.fragment.condition.BluetoothFragment",
+            "",
+            CoreAnim.slide,
+            R.drawable.auto_task_icon_bluetooth
         ),
     )
 
@@ -141,58 +169,79 @@ class TasksEditFragment : BaseFragment<FragmentTasksEditBinding?>(), View.OnClic
         PageInfo(
             getString(R.string.task_sendsms),
             "com.idormy.sms.forwarder.fragment.action.SendSmsFragment",
-            "{\"\":\"\"}",
+            "",
             CoreAnim.slide,
             R.drawable.auto_task_icon_sms
         ),
         PageInfo(
             getString(R.string.task_notification),
             "com.idormy.sms.forwarder.fragment.action.NotificationFragment",
-            "{\"\":\"\"}",
+            "",
             CoreAnim.slide,
             R.drawable.auto_task_icon_notification,
         ),
         PageInfo(
             getString(R.string.task_cleaner),
             "com.idormy.sms.forwarder.fragment.action.CleanerFragment",
-            "{\"\":\"\"}",
+            "",
             CoreAnim.slide,
             R.drawable.auto_task_icon_cleaner
         ),
         PageInfo(
             getString(R.string.task_settings),
             "com.idormy.sms.forwarder.fragment.action.SettingsFragment",
-            "{\"\":\"\"}",
+            "",
             CoreAnim.slide,
             R.drawable.auto_task_icon_settings
         ),
         PageInfo(
             getString(R.string.task_frpc),
             "com.idormy.sms.forwarder.fragment.action.FrpcFragment",
-            "{\"\":\"\"}",
+            "",
             CoreAnim.slide,
             R.drawable.auto_task_icon_frpc
         ),
         PageInfo(
             getString(R.string.task_http_server),
             "com.idormy.sms.forwarder.fragment.action.HttpServerFragment",
-            "{\"\":\"\"}",
+            "",
             CoreAnim.slide,
             R.drawable.auto_task_icon_http_server
         ),
         PageInfo(
             getString(R.string.task_rule),
             "com.idormy.sms.forwarder.fragment.action.RuleFragment",
-            "{\"\":\"\"}",
+            "",
             CoreAnim.slide,
             R.drawable.auto_task_icon_rule
         ),
         PageInfo(
             getString(R.string.task_sender),
             "com.idormy.sms.forwarder.fragment.action.SenderFragment",
-            "{\"\":\"\"}",
+            "",
             CoreAnim.slide,
             R.drawable.auto_task_icon_sender
+        ),
+        PageInfo(
+            getString(R.string.task_alarm),
+            "com.idormy.sms.forwarder.fragment.action.AlarmFragment",
+            "",
+            CoreAnim.slide,
+            R.drawable.auto_task_icon_alarm
+        ),
+        PageInfo(
+            getString(R.string.task_resend),
+            "com.idormy.sms.forwarder.fragment.action.ResendFragment",
+            "",
+            CoreAnim.slide,
+            R.drawable.auto_task_icon_resend
+        ),
+        PageInfo(
+            getString(R.string.task_task),
+            "com.idormy.sms.forwarder.fragment.action.TaskActionFragment",
+            "",
+            CoreAnim.slide,
+            R.drawable.auto_task_icon_task
         ),
     )
 
@@ -417,13 +466,20 @@ class TasksEditFragment : BaseFragment<FragmentTasksEditBinding?>(), View.OnClic
     private fun checkForm(): Task {
         val taskName = binding!!.etName.text.toString().trim()
         if (taskName.isEmpty()) {
-            throw Exception("请输入任务名称")
+            throw Exception(getString(R.string.invalid_task_name))
         }
         if (conditionsList.size <= 0) {
-            throw Exception("请添加触发条件")
+            throw Exception(getString(R.string.invalid_conditions))
         }
         if (actionsList.size <= 0) {
-            throw Exception("请添加执行动作")
+            throw Exception(getString(R.string.invalid_actions))
+        }
+
+        //短信广播/通话广播/APP通知 类型条件只能放在第一个
+        for (i in 1 until conditionsList.size) {
+            if (conditionsList[i].type == TASK_CONDITION_SMS || conditionsList[i].type == TASK_CONDITION_CALL || conditionsList[i].type == TASK_CONDITION_APP) {
+                throw Exception(getString(R.string.msg_condition_must_be_trigger))
+            }
         }
 
         val lastExecTime = Date()
@@ -438,7 +494,7 @@ class TasksEditFragment : BaseFragment<FragmentTasksEditBinding?>(), View.OnClic
                 //检查定时任务的时间设置
                 val cronSetting = Gson().fromJson(firstCondition.setting, CronSetting::class.java)
                 if (cronSetting.expression.isEmpty()) {
-                    throw Exception("请设置定时任务的时间")
+                    throw Exception(getString(R.string.invalid_cron))
                 }
                 val cronExpression = CronExpression(cronSetting.expression)
                 nextExecTime = cronExpression.getNextValidTimeAfter(lastExecTime)
@@ -483,6 +539,11 @@ class TasksEditFragment : BaseFragment<FragmentTasksEditBinding?>(), View.OnClic
             //判断点击的是条件还是动作
             if (widgetInfo.classPath.contains(".condition.")) {
                 val typeCondition = pos + KEY_BACK_CODE_CONDITION
+                //短信广播、通话广播、APP通知 类型条件必须作为触发提交
+                if ((typeCondition == TASK_CONDITION_SMS || typeCondition == TASK_CONDITION_CALL || typeCondition == TASK_CONDITION_APP) && actionsList.isNotEmpty()) {
+                    XToastUtils.error(getString(R.string.msg_condition_must_be_trigger))
+                    return
+                }
                 //判断是否已经添加过该类型条件
                 for (item in conditionsList) {
                     //注意：TASK_CONDITION_XXX 枚举值 等于 TASK_CONDITION_FRAGMENT_LIST 索引加上 KEY_BACK_CODE_CONDITION，不可改变
@@ -502,7 +563,7 @@ class TasksEditFragment : BaseFragment<FragmentTasksEditBinding?>(), View.OnClic
                             .negativeText(R.string.lab_no).onPositive { _: MaterialDialog?, _: DialogAction? ->
                                 SettingUtils.enableLocation = true
                                 val serviceIntent = Intent(requireContext(), LocationService::class.java)
-                                serviceIntent.action = "START"
+                                serviceIntent.action = ACTION_START
                                 requireContext().startService(serviceIntent)
                             }.show()
                         return
@@ -511,6 +572,12 @@ class TasksEditFragment : BaseFragment<FragmentTasksEditBinding?>(), View.OnClic
                     //进入地点 或 离开地点 类型条件互斥
                     if ((typeCondition == TASK_CONDITION_TO_ADDRESS || typeCondition == TASK_CONDITION_LEAVE_ADDRESS) && (item.type == TASK_CONDITION_TO_ADDRESS || item.type == TASK_CONDITION_LEAVE_ADDRESS)) {
                         XToastUtils.error(getString(R.string.only_one_location_condition))
+                        return
+                    }
+
+                    //短信广播、通话广播、APP通知 类型条件互斥
+                    if ((typeCondition == TASK_CONDITION_SMS || typeCondition == TASK_CONDITION_CALL || typeCondition == TASK_CONDITION_APP) && (item.type == TASK_CONDITION_SMS || item.type == TASK_CONDITION_CALL || item.type == TASK_CONDITION_APP)) {
+                        XToastUtils.error(getString(R.string.only_one_msg_condition))
                         return
                     }
                 }
@@ -525,8 +592,10 @@ class TasksEditFragment : BaseFragment<FragmentTasksEditBinding?>(), View.OnClic
                     }
                 }
             }
+
             @Suppress("UNCHECKED_CAST") PageOption.to(Class.forName(widgetInfo.classPath) as Class<XPageFragment>) //跳转的fragment
                 .setRequestCode(0) //requestCode: 0 新增 、>0 编辑（itemListXxx 的索引加1）
+                .putString(KEY_EVENT_PARAMS_CONDITION, widgetInfo.params)
                 .open(this)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -617,6 +686,7 @@ class TasksEditFragment : BaseFragment<FragmentTasksEditBinding?>(), View.OnClic
         PageOption.to(Class.forName(widgetInfo.classPath) as Class<XPageFragment>) //跳转的fragment
             .setRequestCode(position + 1) //requestCode: 0 新增 、>0 编辑（conditionsList 的索引加1）
             .putString(KEY_EVENT_DATA_CONDITION, condition.setting)
+            .putString(KEY_EVENT_PARAMS_CONDITION, widgetInfo.params)
             .open(this)
     }
 

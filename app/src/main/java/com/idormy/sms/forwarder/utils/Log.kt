@@ -1,6 +1,7 @@
 package com.idormy.sms.forwarder.utils
 
 import android.content.Context
+import android.os.Build
 import com.idormy.sms.forwarder.App
 import java.io.File
 import java.io.FileWriter
@@ -40,24 +41,31 @@ object Log {
     }
 
     fun logToFile(level: String, tag: String, message: String) {
+        if (Build.DEVICE == null) return
+        
         if (!::appContext.isInitialized) {
             throw IllegalStateException("Log not initialized. Call init(context) first.")
         }
 
         if (!App.isDebug) return
 
-        createLogFile()
-
-        logFile?.let { file ->
+        Thread {
             try {
-                val logTimeStamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date())
-                val logWriter = FileWriter(file, true)
-                logWriter.append("$logTimeStamp | $level | $tag | $message\n\n")
-                logWriter.close()
+                createLogFile()
+                logFile?.let { file ->
+                    try {
+                        val logTimeStamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date())
+                        val logWriter = FileWriter(file, true)
+                        logWriter.append("$logTimeStamp | $level | $tag | $message\n\n")
+                        logWriter.close()
+                    } catch (e: Exception) {
+                        AndroidLog.e(TAG, "Error writing to file: ${e.message}")
+                    }
+                }
             } catch (e: Exception) {
                 AndroidLog.e(TAG, "Error writing to file: ${e.message}")
             }
-        }
+        }.start()
     }
 
     fun v(tag: String, message: String) {

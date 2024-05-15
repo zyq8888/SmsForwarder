@@ -1,5 +1,6 @@
 package com.idormy.sms.forwarder.utils.task
 
+import android.bluetooth.BluetoothAdapter
 import android.os.BatteryManager
 import com.idormy.sms.forwarder.R
 import com.idormy.sms.forwarder.entity.LocationInfo
@@ -8,9 +9,13 @@ import com.idormy.sms.forwarder.utils.SP_BATTERY_LEVEL
 import com.idormy.sms.forwarder.utils.SP_BATTERY_PCT
 import com.idormy.sms.forwarder.utils.SP_BATTERY_PLUGGED
 import com.idormy.sms.forwarder.utils.SP_BATTERY_STATUS
+import com.idormy.sms.forwarder.utils.SP_BLUETOOTH_STATE
+import com.idormy.sms.forwarder.utils.SP_CONNECTED_DEVICE
 import com.idormy.sms.forwarder.utils.SP_DATA_SIM_SLOT
+import com.idormy.sms.forwarder.utils.SP_DISCOVERED_DEVICES
 import com.idormy.sms.forwarder.utils.SP_IPV4
 import com.idormy.sms.forwarder.utils.SP_IPV6
+import com.idormy.sms.forwarder.utils.SP_IP_LIST
 import com.idormy.sms.forwarder.utils.SP_LOCATION_INFO_NEW
 import com.idormy.sms.forwarder.utils.SP_LOCATION_INFO_OLD
 import com.idormy.sms.forwarder.utils.SP_LOCK_SCREEN_ACTION
@@ -18,21 +23,28 @@ import com.idormy.sms.forwarder.utils.SP_NETWORK_STATE
 import com.idormy.sms.forwarder.utils.SP_SIM_STATE
 import com.idormy.sms.forwarder.utils.SP_WIFI_SSID
 import com.idormy.sms.forwarder.utils.SharedPreference
+import com.idormy.sms.forwarder.utils.TASK_ACTION_ALARM
 import com.idormy.sms.forwarder.utils.TASK_ACTION_CLEANER
 import com.idormy.sms.forwarder.utils.TASK_ACTION_FRPC
 import com.idormy.sms.forwarder.utils.TASK_ACTION_HTTPSERVER
 import com.idormy.sms.forwarder.utils.TASK_ACTION_NOTIFICATION
+import com.idormy.sms.forwarder.utils.TASK_ACTION_RESEND
 import com.idormy.sms.forwarder.utils.TASK_ACTION_RULE
 import com.idormy.sms.forwarder.utils.TASK_ACTION_SENDER
 import com.idormy.sms.forwarder.utils.TASK_ACTION_SENDSMS
 import com.idormy.sms.forwarder.utils.TASK_ACTION_SETTINGS
+import com.idormy.sms.forwarder.utils.TASK_ACTION_TASK
+import com.idormy.sms.forwarder.utils.TASK_CONDITION_APP
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_BATTERY
+import com.idormy.sms.forwarder.utils.TASK_CONDITION_BLUETOOTH
+import com.idormy.sms.forwarder.utils.TASK_CONDITION_CALL
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_CHARGE
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_CRON
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_LEAVE_ADDRESS
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_LOCK_SCREEN
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_NETWORK
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_SIM
+import com.idormy.sms.forwarder.utils.TASK_CONDITION_SMS
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_TO_ADDRESS
 
 /**
@@ -53,6 +65,10 @@ class TaskUtils private constructor() {
                 TASK_CONDITION_BATTERY -> R.drawable.auto_task_icon_battery
                 TASK_CONDITION_CHARGE -> R.drawable.auto_task_icon_charge
                 TASK_CONDITION_LOCK_SCREEN -> R.drawable.auto_task_icon_lock_screen
+                TASK_CONDITION_SMS -> R.drawable.auto_task_icon_sms
+                TASK_CONDITION_CALL -> R.drawable.auto_task_icon_incall
+                TASK_CONDITION_APP -> R.drawable.auto_task_icon_start_activity
+                TASK_CONDITION_BLUETOOTH -> R.drawable.auto_task_icon_bluetooth
                 TASK_ACTION_SENDSMS -> R.drawable.auto_task_icon_sms
                 TASK_ACTION_NOTIFICATION -> R.drawable.auto_task_icon_notification
                 TASK_ACTION_CLEANER -> R.drawable.auto_task_icon_cleaner
@@ -61,6 +77,9 @@ class TaskUtils private constructor() {
                 TASK_ACTION_HTTPSERVER -> R.drawable.auto_task_icon_http_server
                 TASK_ACTION_RULE -> R.drawable.auto_task_icon_rule
                 TASK_ACTION_SENDER -> R.drawable.auto_task_icon_sender
+                TASK_ACTION_ALARM -> R.drawable.auto_task_icon_alarm
+                TASK_ACTION_RESEND -> R.drawable.auto_task_icon_resend
+                TASK_ACTION_TASK -> R.drawable.auto_task_icon_task
                 else -> R.drawable.auto_task_icon_custom_time
             }
         }
@@ -76,6 +95,10 @@ class TaskUtils private constructor() {
                 TASK_CONDITION_BATTERY -> R.drawable.auto_task_icon_battery_grey
                 TASK_CONDITION_CHARGE -> R.drawable.auto_task_icon_charge_grey
                 TASK_CONDITION_LOCK_SCREEN -> R.drawable.auto_task_icon_lock_screen_grey
+                TASK_CONDITION_SMS -> R.drawable.auto_task_icon_sms_grey
+                TASK_CONDITION_CALL -> R.drawable.auto_task_icon_incall_grey
+                TASK_CONDITION_APP -> R.drawable.auto_task_icon_start_activity_grey
+                TASK_CONDITION_BLUETOOTH -> R.drawable.auto_task_icon_bluetooth_grey
                 TASK_ACTION_SENDSMS -> R.drawable.auto_task_icon_sms_grey
                 TASK_ACTION_NOTIFICATION -> R.drawable.auto_task_icon_notification_grey
                 TASK_ACTION_CLEANER -> R.drawable.auto_task_icon_cleaner_grey
@@ -84,6 +107,9 @@ class TaskUtils private constructor() {
                 TASK_ACTION_HTTPSERVER -> R.drawable.auto_task_icon_http_server_grey
                 TASK_ACTION_RULE -> R.drawable.auto_task_icon_rule_grey
                 TASK_ACTION_SENDER -> R.drawable.auto_task_icon_sender_grey
+                TASK_ACTION_ALARM -> R.drawable.auto_task_icon_alarm_grey
+                TASK_ACTION_RESEND -> R.drawable.auto_task_icon_resend_grey
+                TASK_ACTION_TASK -> R.drawable.auto_task_icon_task_grey
                 else -> R.drawable.auto_task_icon_custom_time_grey
             }
         }
@@ -118,6 +144,9 @@ class TaskUtils private constructor() {
         //IPv6地址
         var ipv6: String by SharedPreference(SP_IPV6, "")
 
+        //IP地址列表
+        var ipList: String by SharedPreference(SP_IP_LIST, "")
+
         //SIM卡状态：0-未知状态，1-卡被移除，5-卡已准备就绪
         var simState: Int by SharedPreference(SP_SIM_STATE, 0)
 
@@ -129,6 +158,15 @@ class TaskUtils private constructor() {
 
         //上次锁屏广播
         var lockScreenAction: String by SharedPreference(SP_LOCK_SCREEN_ACTION, "")
+
+        //已发现的蓝牙设备
+        var discoveredDevices: MutableMap<String, String> by SharedPreference(SP_DISCOVERED_DEVICES, mutableMapOf())
+
+        //已连接的蓝牙设备
+        var connectedDevices: MutableMap<String, String> by SharedPreference(SP_CONNECTED_DEVICE, mutableMapOf())
+
+        //蓝牙状态
+        var bluetoothState: Int by SharedPreference(SP_BLUETOOTH_STATE, BluetoothAdapter.STATE_ON)
 
     }
 }

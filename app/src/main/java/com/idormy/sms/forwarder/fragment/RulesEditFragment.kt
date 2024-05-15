@@ -4,7 +4,11 @@ import android.annotation.SuppressLint
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.*
+import android.widget.AdapterView
+import android.widget.CompoundButton
+import android.widget.EditText
+import android.widget.RadioGroup
+import android.widget.TextView
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Observer
 import androidx.recyclerview.widget.ItemTouchHelper
@@ -13,6 +17,7 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.idormy.sms.forwarder.App
+import com.idormy.sms.forwarder.App.Companion.CALL_TYPE_MAP
 import com.idormy.sms.forwarder.R
 import com.idormy.sms.forwarder.adapter.SenderRecyclerAdapter
 import com.idormy.sms.forwarder.adapter.base.ItemMoveCallback
@@ -28,7 +33,40 @@ import com.idormy.sms.forwarder.database.viewmodel.BaseViewModelFactory
 import com.idormy.sms.forwarder.database.viewmodel.RuleViewModel
 import com.idormy.sms.forwarder.databinding.FragmentRulesEditBinding
 import com.idormy.sms.forwarder.entity.MsgInfo
-import com.idormy.sms.forwarder.utils.*
+import com.idormy.sms.forwarder.utils.CHECK_CONTAIN
+import com.idormy.sms.forwarder.utils.CHECK_END_WITH
+import com.idormy.sms.forwarder.utils.CHECK_IS
+import com.idormy.sms.forwarder.utils.CHECK_NOT_CONTAIN
+import com.idormy.sms.forwarder.utils.CHECK_REGEX
+import com.idormy.sms.forwarder.utils.CHECK_SIM_SLOT_1
+import com.idormy.sms.forwarder.utils.CHECK_SIM_SLOT_2
+import com.idormy.sms.forwarder.utils.CHECK_SIM_SLOT_ALL
+import com.idormy.sms.forwarder.utils.CHECK_START_WITH
+import com.idormy.sms.forwarder.utils.CommonUtils
+import com.idormy.sms.forwarder.utils.DataProvider
+import com.idormy.sms.forwarder.utils.EVENT_LOAD_APP_LIST
+import com.idormy.sms.forwarder.utils.EVENT_TOAST_ERROR
+import com.idormy.sms.forwarder.utils.FILED_CALL_TYPE
+import com.idormy.sms.forwarder.utils.FILED_INFORM_CONTENT
+import com.idormy.sms.forwarder.utils.FILED_MSG_CONTENT
+import com.idormy.sms.forwarder.utils.FILED_MULTI_MATCH
+import com.idormy.sms.forwarder.utils.FILED_PACKAGE_NAME
+import com.idormy.sms.forwarder.utils.FILED_PHONE_NUM
+import com.idormy.sms.forwarder.utils.FILED_TRANSPOND_ALL
+import com.idormy.sms.forwarder.utils.FILED_UID
+import com.idormy.sms.forwarder.utils.KEY_RULE_CLONE
+import com.idormy.sms.forwarder.utils.KEY_RULE_ID
+import com.idormy.sms.forwarder.utils.KEY_RULE_TYPE
+import com.idormy.sms.forwarder.utils.Log
+import com.idormy.sms.forwarder.utils.PhoneUtils
+import com.idormy.sms.forwarder.utils.SENDER_LOGIC_ALL
+import com.idormy.sms.forwarder.utils.SENDER_LOGIC_UNTIL_FAIL
+import com.idormy.sms.forwarder.utils.SENDER_LOGIC_UNTIL_SUCCESS
+import com.idormy.sms.forwarder.utils.STATUS_OFF
+import com.idormy.sms.forwarder.utils.STATUS_ON
+import com.idormy.sms.forwarder.utils.SendUtils
+import com.idormy.sms.forwarder.utils.SettingUtils
+import com.idormy.sms.forwarder.utils.XToastUtils
 import com.idormy.sms.forwarder.workers.LoadAppListWorker
 import com.jeremyliao.liveeventbus.LiveEventBus
 import com.xuexiang.xaop.annotation.SingleClick
@@ -49,8 +87,7 @@ import io.reactivex.SingleObserver
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.Disposable
 import io.reactivex.schedulers.Schedulers
-import kotlinx.coroutines.*
-import java.util.*
+import java.util.Date
 
 @Page(name = "转发规则·编辑器")
 @Suppress("PrivatePropertyName")
@@ -59,17 +96,6 @@ class RulesEditFragment : BaseFragment<FragmentRulesEditBinding?>(), View.OnClic
     private val TAG: String = RulesEditFragment::class.java.simpleName
     private var titleBar: TitleBar? = null
     private val viewModel by viewModels<RuleViewModel> { BaseViewModelFactory(context) }
-
-    //通话类型：1.来电挂机 2.去电挂机 3.未接来电 4.来电提醒 5.来电接通 6.去电拨出
-    private val CALL_TYPE_MAP = mapOf(
-        //"0" to getString(R.string.unknown_call),
-        "1" to getString(R.string.incoming_call_ended),
-        "2" to getString(R.string.outgoing_call_ended),
-        "3" to getString(R.string.missed_call),
-        "4" to getString(R.string.incoming_call_received),
-        "5" to getString(R.string.incoming_call_answered),
-        "6" to getString(R.string.outgoing_call_started),
-    )
 
     private var callType = 1
     private var callTypeIndex = 0
@@ -666,6 +692,10 @@ class RulesEditFragment : BaseFragment<FragmentRulesEditBinding?>(), View.OnClic
         }
 
         val smsTemplate = binding!!.etSmsTemplate.text.toString().trim()
+        val checkResult = CommonUtils.checkTemplateTag(smsTemplate)
+        if (checkResult.isNotEmpty()) {
+            throw Exception(checkResult)
+        }
         val regexReplace = binding!!.etRegexReplace.text.toString().trim()
         val lineNum = checkRegexReplace(regexReplace)
         if (lineNum > 0) {
@@ -730,6 +760,14 @@ class RulesEditFragment : BaseFragment<FragmentRulesEditBinding?>(), View.OnClic
         for (line in lineArray!!) {
             val position = line.indexOf("===")
             if (position < 1) return lineNum
+
+            // 校验正则表达式部分是否合法
+            try {
+                line.substring(0, position).toRegex()
+            } catch (e: Exception) {
+                return lineNum
+            }
+
             lineNum++
         }
         return 0

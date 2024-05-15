@@ -65,13 +65,10 @@ class NetworkChangeReceiver : BroadcastReceiver() {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     TaskUtils.dataSimSlot = getSlotIndex(context) + 1
                 }
+                TaskUtils.wifiSsid = ""
             } else if (networkInfo.type == ConnectivityManager.TYPE_WIFI) {
                 //WiFi网络
                 TaskUtils.networkState = 2
-                //获取WiFi名称
-                val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-                val wifiInfo = wifiManager.connectionInfo
-                TaskUtils.wifiSsid = wifiInfo.ssid.replace("\"", "")
             }
         } else {
             Log.d(TAG, "Network Disconnected")
@@ -91,7 +88,7 @@ class NetworkChangeReceiver : BroadcastReceiver() {
             .setInitialDelay(DELAY_TIME_AFTER_SIM_READY, TimeUnit.MILLISECONDS)
             .setInputData(
                 workDataOf(
-                    TaskWorker.conditionType to TASK_CONDITION_NETWORK,
+                    TaskWorker.CONDITION_TYPE to TASK_CONDITION_NETWORK,
                 )
             ).build()
         WorkManager.getInstance(context).enqueue(request)

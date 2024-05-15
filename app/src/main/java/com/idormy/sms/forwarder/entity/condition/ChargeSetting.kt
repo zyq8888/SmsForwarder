@@ -24,6 +24,7 @@ data class ChargeSetting(
             R.id.rb_plugged_ac -> BatteryManager.BATTERY_PLUGGED_AC
             R.id.rb_plugged_usb -> BatteryManager.BATTERY_PLUGGED_USB
             R.id.rb_plugged_wireless -> BatteryManager.BATTERY_PLUGGED_WIRELESS
+            R.id.rb_plugged_unlimited -> 0 //不限
             else -> BatteryManager.BATTERY_PLUGGED_AC
         }
         description = String.format(getString(R.string.battery_status), getStatusStr(status))
@@ -57,7 +58,7 @@ data class ChargeSetting(
             BatteryManager.BATTERY_PLUGGED_AC -> getString(R.string.battery_ac)
             BatteryManager.BATTERY_PLUGGED_USB -> getString(R.string.battery_usb)
             BatteryManager.BATTERY_PLUGGED_WIRELESS -> getString(R.string.battery_wireless)
-            else -> getString(R.string.battery_unknown)
+            else -> getString(R.string.battery_unlimited)
         }
     }
 
@@ -66,13 +67,13 @@ data class ChargeSetting(
             BatteryManager.BATTERY_PLUGGED_AC -> R.id.rb_plugged_ac
             BatteryManager.BATTERY_PLUGGED_USB -> R.id.rb_plugged_usb
             BatteryManager.BATTERY_PLUGGED_WIRELESS -> R.id.rb_plugged_wireless
-            else -> R.id.rb_plugged_unknown
+            else -> R.id.rb_plugged_unlimited
         }
     }
 
     fun getMsg(statusNew: Int, statusOld: Int, pluggedNew: Int, pluggedOld: Int, batteryInfo: String): String {
 
-        if (statusNew != status || pluggedNew != plugged) return ""
+        if (statusNew != status || (pluggedNew != plugged && plugged != 0)) return ""
 
         return getString(R.string.battery_status_changed) + getStatusStr(statusOld) + "(" + getPluggedStr(pluggedOld) + ") → " + getStatusStr(statusNew) + "(" + getPluggedStr(pluggedNew) + ")" + batteryInfo
     }

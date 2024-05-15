@@ -16,16 +16,21 @@ import com.idormy.sms.forwarder.core.Core
 import com.idormy.sms.forwarder.database.entity.Rule
 import com.idormy.sms.forwarder.entity.MsgInfo
 import com.idormy.sms.forwarder.entity.TaskSetting
+import com.idormy.sms.forwarder.entity.action.AlarmSetting
 import com.idormy.sms.forwarder.entity.action.CleanerSetting
 import com.idormy.sms.forwarder.entity.action.FrpcSetting
 import com.idormy.sms.forwarder.entity.action.HttpServerSetting
+import com.idormy.sms.forwarder.entity.action.ResendSetting
 import com.idormy.sms.forwarder.entity.action.RuleSetting
 import com.idormy.sms.forwarder.entity.action.SenderSetting
 import com.idormy.sms.forwarder.entity.action.SettingsSetting
 import com.idormy.sms.forwarder.entity.action.SmsSetting
+import com.idormy.sms.forwarder.entity.action.TaskActionSetting
 import com.idormy.sms.forwarder.service.HttpServerService
 import com.idormy.sms.forwarder.service.LocationService
+import com.idormy.sms.forwarder.utils.ACTION_RESTART
 import com.idormy.sms.forwarder.utils.CacheUtils
+import com.idormy.sms.forwarder.utils.EVENT_ALARM_ACTION
 import com.idormy.sms.forwarder.utils.EVENT_TOAST_ERROR
 import com.idormy.sms.forwarder.utils.EVENT_TOAST_INFO
 import com.idormy.sms.forwarder.utils.EVENT_TOAST_SUCCESS
@@ -36,19 +41,22 @@ import com.idormy.sms.forwarder.utils.Log
 import com.idormy.sms.forwarder.utils.PhoneUtils
 import com.idormy.sms.forwarder.utils.SendUtils
 import com.idormy.sms.forwarder.utils.SettingUtils
+import com.idormy.sms.forwarder.utils.TASK_ACTION_ALARM
 import com.idormy.sms.forwarder.utils.TASK_ACTION_CLEANER
 import com.idormy.sms.forwarder.utils.TASK_ACTION_FRPC
 import com.idormy.sms.forwarder.utils.TASK_ACTION_HTTPSERVER
 import com.idormy.sms.forwarder.utils.TASK_ACTION_NOTIFICATION
+import com.idormy.sms.forwarder.utils.TASK_ACTION_RESEND
 import com.idormy.sms.forwarder.utils.TASK_ACTION_RULE
 import com.idormy.sms.forwarder.utils.TASK_ACTION_SENDER
 import com.idormy.sms.forwarder.utils.TASK_ACTION_SENDSMS
 import com.idormy.sms.forwarder.utils.TASK_ACTION_SETTINGS
+import com.idormy.sms.forwarder.utils.TASK_ACTION_TASK
 import com.idormy.sms.forwarder.utils.TaskWorker
+import com.idormy.sms.forwarder.utils.task.ConditionUtils
 import com.jeremyliao.liveeventbus.LiveEventBus
 import com.xuexiang.xrouter.utils.TextUtils
 import com.xuexiang.xutil.XUtil
-import com.xuexiang.xutil.file.FileUtils
 import com.xuexiang.xutil.resource.ResUtils.getString
 import frpclib.Frpclib
 import java.util.Calendar
@@ -61,13 +69,27 @@ class ActionWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     private var taskId = -1L
 
     override suspend fun doWork(): Result {
-        taskId = inputData.getLong(TaskWorker.taskId, -1L)
-        val taskActionsJson = inputData.getString(TaskWorker.taskActions)
-        val msgInfoJson = inputData.getString(TaskWorker.msgInfo)
+        taskId = inputData.getLong(TaskWorker.TASK_ID, -1L)
+        val taskConditionsJson = inputData.getString(TaskWorker.TASK_CONDITIONS)
+        val taskActionsJson = inputData.getString(TaskWorker.TASK_ACTIONS)
+        val msgInfoJson = inputData.getString(TaskWorker.MSG_INFO)
         Log.d(TAG, "taskId: $taskId, taskActionsJson: $taskActionsJson, msgInfoJson: $msgInfoJson")
         if (taskId == -1L || taskActionsJson.isNullOrEmpty() || msgInfoJson.isNullOrEmpty()) {
             Log.d(TAG, "taskId is -1L or actionSetting is null")
             return Result.failure()
+        }
+
+        //TODO: 如果传入的taskConditionsJson不为空，需要再次判断触发条件是否满足
+        if (!taskConditionsJson.isNullOrEmpty()) {
+            val conditionList = Gson().fromJson(taskConditionsJson, Array<TaskSetting>::class.java).toMutableList()
+            if (conditionList.isEmpty()) {
+                writeLog("conditionList is empty")
+                return Result.failure()
+            }
+            if (!ConditionUtils.checkCondition(taskId, conditionList, 0, 0)) {
+                writeLog("recheck condition is not pass", "WARN")
+                return Result.failure()
+            }
         }
 
         val actionList = Gson().fromJson(taskActionsJson, Array<TaskSetting>::class.java).toMutableList()
@@ -106,7 +128,9 @@ class ActionWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                         val msg = if (ActivityCompat.checkSelfPermission(App.context, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
                             getString(R.string.no_sms_sending_permission)
                         } else {
-                            PhoneUtils.sendSms(mSubscriptionId, smsSetting.phoneNumbers, smsSetting.msgContent)
+                            val mobileList = msgInfo.replaceTemplate(smsSetting.phoneNumbers)
+                            val message = msgInfo.replaceTemplate(smsSetting.msgContent)
+                            PhoneUtils.sendSms(mSubscriptionId, mobileList, message)
                         }
                         if (msg == null || msg == "") {
                             successNum++
@@ -118,11 +142,14 @@ class ActionWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
                     TASK_ACTION_NOTIFICATION -> {
                         val ruleSetting = Gson().fromJson(action.setting, Rule::class.java)
+                        //重新查询发送通道最新设置
+                        val ids = ruleSetting.senderList.joinToString(",") { it.id.toString() }
+                        ruleSetting.senderList = Core.sender.getByIds(ids.split(",").map { it.trim().toLong() }, ids)
                         //自动任务的不需要吐司或者更新日志，特殊处理 logId = -1，msgId = -1
                         SendUtils.sendMsgSender(msgInfo, ruleSetting, 0, -1L, -1L)
 
                         successNum++
-                        writeLog(String.format(getString(R.string.successful_execution), ruleSetting.name), "SUCCESS")
+                        writeLog(String.format(getString(R.string.successful_execution), ruleSetting.getName()), "SUCCESS")
                     }
 
                     TASK_ACTION_CLEANER -> {
@@ -179,7 +206,7 @@ class ActionWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
                         if (settingsSetting.enableLocation) {
                             val serviceIntent = Intent(App.context, LocationService::class.java)
-                            serviceIntent.action = "RESTART"
+                            serviceIntent.action = ACTION_RESTART
                             App.context.startService(serviceIntent)
                         }
 
@@ -193,7 +220,7 @@ class ActionWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                     }
 
                     TASK_ACTION_FRPC -> {
-                        if (!FileUtils.isFileExists(App.context.filesDir?.absolutePath + "/libs/libgojni.so")) {
+                        if (!App.FrpclibInited) {
                             writeLog("还未下载Frpc库")
                             continue
                         }
@@ -289,6 +316,53 @@ class ActionWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
                         successNum++
                         writeLog(String.format(getString(R.string.successful_execution), senderSetting.description), "SUCCESS")
+                    }
+
+                    TASK_ACTION_TASK -> {
+                        val taskActionSetting = Gson().fromJson(action.setting, TaskActionSetting::class.java)
+                        if (taskActionSetting == null) {
+                            writeLog("taskActionSetting is null")
+                            continue
+                        }
+
+                        val ids = taskActionSetting.taskList.map { it.id }
+                        if (ids.isNotEmpty()) {
+                            Core.task.updateStatusByIds(ids, taskActionSetting.status)
+                        }
+
+                        successNum++
+                        writeLog(String.format(getString(R.string.successful_execution), taskActionSetting.description), "SUCCESS")
+                    }
+
+                    TASK_ACTION_ALARM -> {
+                        val alarmSetting = Gson().fromJson(action.setting, AlarmSetting::class.java)
+                        if (alarmSetting == null) {
+                            writeLog("alarmSetting is null")
+                            continue
+                        }
+
+                        // 发送开始播放指令
+                        LiveEventBus.get<AlarmSetting>(EVENT_ALARM_ACTION).post(alarmSetting)
+
+                        successNum++
+                        writeLog(String.format(getString(R.string.successful_execution), alarmSetting.description), "SUCCESS")
+                    }
+
+                    TASK_ACTION_RESEND -> {
+                        val resendSetting = Gson().fromJson(action.setting, ResendSetting::class.java)
+                        if (resendSetting == null) {
+                            writeLog("resendSetting is null")
+                            continue
+                        }
+
+                        val logsList = Core.logs.getIdsByTimeAndStatus(resendSetting.hours, resendSetting.statusList)
+                        logsList.forEach { item ->
+                            Log.d(TAG, "resend logsList item: $item")
+                            SendUtils.retrySendMsg(item.id)
+                        }
+
+                        successNum++
+                        writeLog(String.format(getString(R.string.successful_execution), resendSetting.description), "SUCCESS")
                     }
 
                     else -> {

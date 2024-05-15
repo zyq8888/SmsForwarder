@@ -10,6 +10,9 @@ class SettingUtils private constructor() {
         //是否启动时检查更新
         var autoCheckUpdate: Boolean by SharedPreference(AUTO_CHECK_UPDATE, true)
 
+        //是否加入SmsF预览体验计划
+        var joinPreviewProgram: Boolean by SharedPreference(JOIN_PREVIEW_PROGRAM, false)
+
         //是否同意隐私政策
         var isAgreePrivacy: Boolean by SharedPreference(IS_AGREE_PRIVACY_KEY, false)
 
@@ -70,6 +73,9 @@ class SettingUtils private constructor() {
 
         //免打扰(禁用转发)时间段——结束
         var silentPeriodEnd: Int by SharedPreference(SP_SILENT_PERIOD_END, 0)
+
+        //免打扰(禁用转发)时间段——记录日志
+        var enableSilentPeriodLogs: Boolean by SharedPreference(SP_ENABLE_SILENT_PERIOD_LOGS, false)
 
         //是否不在最近任务列表中显示
         var enableExcludeFromRecents: Boolean by SharedPreference(SP_ENABLE_EXCLUDE_FROM_RECENTS, false)
@@ -140,6 +146,17 @@ class SettingUtils private constructor() {
         //设置位置更新最小距离（单位：米）；默认距离：0米
         var locationMinDistance: Int by SharedPreference(SP_LOCATION_MIN_DISTANCE, 0)
 
+        //是否跟随系统语言
+        //var isFlowSystemLanguage: Boolean by SharedPreference(SP_IS_FLOW_SYSTEM_LANGUAGE, false)
+
+        //是否启用发现蓝牙设备服务
+        var enableBluetooth: Boolean by SharedPreference(SP_BLUETOOTH, false)
+
+        //扫描蓝牙设备间隔
+        var bluetoothScanInterval: Long by SharedPreference(SP_BLUETOOTH_SCAN_INTERVAL, 10000L)
+
+        //是否忽略匿名设备
+        var bluetoothIgnoreAnonymous: Boolean by SharedPreference(SP_BLUETOOTH_IGNORE_ANONYMOUS, true)
     }
 
     init {

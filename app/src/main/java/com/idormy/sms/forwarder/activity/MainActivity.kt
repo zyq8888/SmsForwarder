@@ -36,6 +36,8 @@ import com.idormy.sms.forwarder.fragment.ServerFragment
 import com.idormy.sms.forwarder.fragment.SettingsFragment
 import com.idormy.sms.forwarder.fragment.TasksFragment
 import com.idormy.sms.forwarder.service.ForegroundService
+import com.idormy.sms.forwarder.utils.ACTION_START
+import com.idormy.sms.forwarder.utils.CommonUtils.Companion.restartApplication
 import com.idormy.sms.forwarder.utils.EVENT_LOAD_APP_LIST
 import com.idormy.sms.forwarder.utils.FRPC_LIB_DOWNLOAD_URL
 import com.idormy.sms.forwarder.utils.FRPC_LIB_VERSION
@@ -62,7 +64,6 @@ import com.yarolegovich.slidingrootnav.SlideGravity
 import com.yarolegovich.slidingrootnav.SlidingRootNav
 import com.yarolegovich.slidingrootnav.SlidingRootNavBuilder
 import com.yarolegovich.slidingrootnav.callback.DragStateListener
-import frpclib.Frpclib
 import java.io.File
 
 @Suppress("PrivatePropertyName", "unused", "DEPRECATION")
@@ -121,7 +122,7 @@ class MainActivity : BaseActivity<ActivityMainBinding?>(), DrawerAdapter.OnItemS
             //启动前台服务
             if (!ForegroundService.isRunning) {
                 val serviceIntent = Intent(this, ForegroundService::class.java)
-                serviceIntent.action = "START"
+                serviceIntent.action = ACTION_START
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     startForegroundService(serviceIntent)
                 } else {
@@ -178,7 +179,7 @@ class MainActivity : BaseActivity<ActivityMainBinding?>(), DrawerAdapter.OnItemS
         //仅当开启自动检查且有网络时自动检查更新/获取提示
         if (SettingUtils.autoCheckUpdate && NetworkUtils.isHaveInternet()) {
             showTips(this)
-            XUpdateInit.checkUpdate(this, false)
+            XUpdateInit.checkUpdate(this, false, SettingUtils.joinPreviewProgram)
         }
     }
 
@@ -278,7 +279,7 @@ class MainActivity : BaseActivity<ActivityMainBinding?>(), DrawerAdapter.OnItemS
             POS_SERVER -> openNewPage(ServerFragment::class.java)
             POS_CLIENT -> openNewPage(ClientFragment::class.java)
             POS_FRPC -> {
-                if (FileUtils.isFileExists(filesDir.absolutePath + "/libs/libgojni.so") && FRPC_LIB_VERSION == Frpclib.getVersion()) {
+                if (App.FrpclibInited) {
                     openNewPage(FrpcFragment::class.java)
                     return
                 }
@@ -347,6 +348,7 @@ class MainActivity : BaseActivity<ActivityMainBinding?>(), DrawerAdapter.OnItemS
             .build()
 
         XHttp.downLoad(downloadUrl)
+            .ignoreHttpsCert()
             .savePath(cacheDir.absolutePath)
             .execute(object : DownloadProgressCallBack<String?>() {
                 override fun onStart() {
@@ -379,9 +381,7 @@ class MainActivity : BaseActivity<ActivityMainBinding?>(), DrawerAdapter.OnItemS
                         .cancelable(false)
                         .positiveText(R.string.confirm)
                         .onPositive { _: MaterialDialog?, _: DialogAction? ->
-                            val intent = Intent(App.context, MainActivity::class.java)
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                            startActivity(intent)
+                            restartApplication()
                         }
                         .show()
                 }

@@ -114,6 +114,11 @@ class SendSmsFragment : BaseFragment<FragmentTasksActionSendSmsBinding?>(), View
         binding!!.etMsgContent.setText(msgContent)
     }
 
+    override fun onDestroyView() {
+        if (mCountDownHelper != null) mCountDownHelper!!.recycle()
+        super.onDestroyView()
+    }
+
     @SuppressLint("SetTextI18n")
     override fun initListeners() {
         binding!!.btnTest.setOnClickListener(this)
@@ -146,7 +151,7 @@ class SendSmsFragment : BaseFragment<FragmentTasksActionSendSmsBinding?>(), View
                                     val taskAction = TaskSetting(TASK_ACTION_SENDSMS, getString(R.string.task_sendsms), settingVo.description, Gson().toJson(settingVo), requestCode)
                                     val taskActionsJson = Gson().toJson(arrayListOf(taskAction))
                                     val msgInfo = MsgInfo("task", getString(R.string.task_sendsms), settingVo.description, Date(), getString(R.string.task_sendsms))
-                                    val actionData = Data.Builder().putLong(TaskWorker.taskId, 0).putString(TaskWorker.taskActions, taskActionsJson).putString(TaskWorker.msgInfo, Gson().toJson(msgInfo)).build()
+                                    val actionData = Data.Builder().putLong(TaskWorker.TASK_ID, 0).putString(TaskWorker.TASK_ACTIONS, taskActionsJson).putString(TaskWorker.MSG_INFO, Gson().toJson(msgInfo)).build()
                                     val actionRequest = OneTimeWorkRequestBuilder<ActionWorker>().setInputData(actionData).build()
                                     WorkManager.getInstance().enqueue(actionRequest)
                                 } catch (e: Exception) {
@@ -191,8 +196,8 @@ class SendSmsFragment : BaseFragment<FragmentTasksActionSendSmsBinding?>(), View
     @SuppressLint("SetTextI18n")
     private fun checkSetting(): SmsSetting {
         phoneNumbers = binding!!.etPhoneNumbers.text.toString().trim()
-        if (!getString(R.string.phone_numbers_regex).toRegex().matches(phoneNumbers)) {
-            throw Exception(getString(R.string.phone_numbers_error))
+        if (!getString(R.string.phone_numbers_with_tag_regex).toRegex().matches(phoneNumbers)) {
+            throw Exception(getString(R.string.phone_numbers_with_tag_error))
         }
 
         msgContent = binding!!.etMsgContent.text.toString().trim()

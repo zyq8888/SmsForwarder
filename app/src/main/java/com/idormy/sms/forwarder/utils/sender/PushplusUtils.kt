@@ -1,17 +1,17 @@
 package com.idormy.sms.forwarder.utils.sender
 
 import android.text.TextUtils
-import com.idormy.sms.forwarder.utils.Log
 import com.google.gson.Gson
 import com.idormy.sms.forwarder.R
 import com.idormy.sms.forwarder.database.entity.Rule
 import com.idormy.sms.forwarder.entity.MsgInfo
 import com.idormy.sms.forwarder.entity.result.PushplusResult
 import com.idormy.sms.forwarder.entity.setting.PushplusSetting
+import com.idormy.sms.forwarder.utils.Log
 import com.idormy.sms.forwarder.utils.SendUtils
 import com.idormy.sms.forwarder.utils.SettingUtils
+import com.idormy.sms.forwarder.utils.interceptor.LoggingInterceptor
 import com.xuexiang.xhttp2.XHttp
-import com.xuexiang.xhttp2.cache.model.CacheMode
 import com.xuexiang.xhttp2.callback.SimpleCallBack
 import com.xuexiang.xhttp2.exception.ApiException
 import com.xuexiang.xutil.resource.ResUtils.getString
@@ -30,9 +30,9 @@ class PushplusUtils private constructor() {
             msgId: Long = 0L
         ) {
             val title: String = if (rule != null) {
-                msgInfo.getTitleForSend(setting.titleTemplate.toString(), rule.regexReplace)
+                msgInfo.getTitleForSend(setting.titleTemplate, rule.regexReplace)
             } else {
-                msgInfo.getTitleForSend(setting.titleTemplate.toString())
+                msgInfo.getTitleForSend(setting.titleTemplate)
             }
             val content: String = if (rule != null) {
                 msgInfo.getContentForSend(rule.smsTemplate, rule.regexReplace)
@@ -48,16 +48,16 @@ class PushplusUtils private constructor() {
             msgMap["content"] = content
 
             if (!TextUtils.isEmpty(title)) msgMap["title"] = title
-            if (!TextUtils.isEmpty(setting.template)) msgMap["template"] = setting.template.toString()
-            if (!TextUtils.isEmpty(setting.topic)) msgMap["topic"] = setting.topic.toString()
+            if (!TextUtils.isEmpty(setting.template)) msgMap["template"] = setting.template
+            if (!TextUtils.isEmpty(setting.topic)) msgMap["topic"] = setting.topic
 
             if (setting.website == getString(R.string.pushplus_plus)) {
-                if (!TextUtils.isEmpty(setting.channel)) msgMap["channel"] = setting.channel.toString()
-                if (!TextUtils.isEmpty(setting.webhook)) msgMap["webhook"] = setting.webhook.toString()
-                if (!TextUtils.isEmpty(setting.callbackUrl)) msgMap["callbackUrl"] = setting.callbackUrl.toString()
+                if (!TextUtils.isEmpty(setting.channel)) msgMap["channel"] = setting.channel
+                if (!TextUtils.isEmpty(setting.webhook)) msgMap["webhook"] = setting.webhook
+                if (!TextUtils.isEmpty(setting.callbackUrl)) msgMap["callbackUrl"] = setting.callbackUrl
                 if (!TextUtils.isEmpty(setting.validTime)) {
-                    val validTime = setting.validTime?.toInt()
-                    if (validTime != null && validTime > 0) {
+                    val validTime = setting.validTime.toInt()
+                    if (validTime > 0) {
                         msgMap["timestamp"] = System.currentTimeMillis() + validTime * 1000L
                     }
                 }
@@ -69,12 +69,11 @@ class PushplusUtils private constructor() {
             XHttp.post(requestUrl)
                 .upJson(requestMsg)
                 .keepJson(true)
-                .timeOut((SettingUtils.requestTimeout * 1000).toLong()) //超时时间10s
-                .cacheMode(CacheMode.NO_CACHE)
                 .retryCount(SettingUtils.requestRetryTimes) //超时重试的次数
-                .retryDelay(SettingUtils.requestDelayTime) //超时重试的延迟时间
-                .retryIncreaseDelay(SettingUtils.requestDelayTime) //超时重试叠加延时
-                .timeStamp(true)
+                .retryDelay(SettingUtils.requestDelayTime * 1000) //超时重试的延迟时间
+                .retryIncreaseDelay(SettingUtils.requestDelayTime * 1000) //超时重试叠加延时
+                .timeStamp(true) //url自动追加时间戳，避免缓存
+                .addInterceptor(LoggingInterceptor(logId)) //增加一个log拦截器, 记录请求日志
                 .execute(object : SimpleCallBack<String>() {
 
                     override fun onError(e: ApiException) {

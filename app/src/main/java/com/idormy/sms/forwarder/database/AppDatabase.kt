@@ -7,15 +7,28 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.idormy.sms.forwarder.database.dao.*
-import com.idormy.sms.forwarder.database.entity.*
+import com.idormy.sms.forwarder.database.dao.FrpcDao
+import com.idormy.sms.forwarder.database.dao.LogsDao
+import com.idormy.sms.forwarder.database.dao.MsgDao
+import com.idormy.sms.forwarder.database.dao.RuleDao
+import com.idormy.sms.forwarder.database.dao.SenderDao
+import com.idormy.sms.forwarder.database.dao.TaskDao
+import com.idormy.sms.forwarder.database.entity.Frpc
+import com.idormy.sms.forwarder.database.entity.Logs
+import com.idormy.sms.forwarder.database.entity.LogsDetail
+import com.idormy.sms.forwarder.database.entity.Msg
+import com.idormy.sms.forwarder.database.entity.Rule
+import com.idormy.sms.forwarder.database.entity.Sender
+import com.idormy.sms.forwarder.database.entity.Task
 import com.idormy.sms.forwarder.database.ext.ConvertersDate
 import com.idormy.sms.forwarder.utils.DATABASE_NAME
+import com.idormy.sms.forwarder.utils.SettingUtils
+import com.idormy.sms.forwarder.utils.TAG_LIST
 
 @Database(
     entities = [Frpc::class, Msg::class, Logs::class, Rule::class, Sender::class, Task::class],
     views = [LogsDetail::class],
-    version = 18,
+    version = 19,
     exportSchema = false
 )
 @TypeConverters(ConvertersDate::class)
@@ -64,7 +77,7 @@ login_fail_exit = false
 type = tcp
 local_ip = 127.0.0.1
 local_port = 5000
-#只要修改下面这一行
+#只要修改下面这一行（frps所在服务器必须暴露的公网端口）
 remote_port = 5000
 
 #[二选一即可]每台机器不可重复，通过 http://smsf.demo.com 访问
@@ -72,7 +85,7 @@ remote_port = 5000
 type = http
 local_ip = 127.0.0.1
 local_port = 5000
-#只要修改下面这一行
+#只要修改下面这一行（在frps端将域名反代到vhost_http_port）
 custom_domains = smsf.demo.com
 ', 0, '1651334400000')
 """.trimIndent()
@@ -96,6 +109,7 @@ custom_domains = smsf.demo.com
                     MIGRATION_15_16,
                     MIGRATION_16_17,
                     MIGRATION_17_18,
+                    MIGRATION_18_19,
                 )
 
             /*if (BuildConfig.DEBUG) {
@@ -183,33 +197,38 @@ CREATE TABLE "Frpc" (
                 )
                 database.execSQL(
                     """
-INSERT INTO "Frpc" VALUES ('830b0a0e-c2b3-4f95-b3c9-55db12923d2e', '远程控制SmsForwarder', '[common]
+INSERT INTO "Frpc" VALUES ('830b0a0e-c2b3-4f95-b3c9-55db12923d2e', '远程控制SmsForwarder', '
 #frps服务端公网IP
-server_addr = 88.88.88.88
+serverAddr = "88.88.88.88"
 #frps服务端公网端口
-server_port = 8888
-#可选，建议启用
-token = 88888888
+serverPort = 8888
 #连接服务端的超时时间（增大时间避免frpc在网络未就绪的情况下启动失败）
-dial_server_timeout = 60
+transport.dialServerTimeout = 60
 #第一次登陆失败后是否退出
-login_fail_exit = false
+loginFailExit = false
+#可选，建议启用
+auth.method = "token"
+auth.token = "88888888"
 
-#[二选一即可]每台机器不可重复，通过 http://88.88.88.88:5000 访问
-[SmsForwarder-TCP]
-type = tcp
-local_ip = 127.0.0.1
-local_port = 5000
-#只要修改下面这一行
-remote_port = 5000
+#[二选一即可]每台机器的 name 和 remotePort 不可重复，通过 http://88.88.88.88:5000 访问
+[[proxies]]
+#同一个frps下，多台设备的 name 不可重复
+name = "SmsForwarder-TCP-001"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 5000
+#只要修改下面这一行（frps所在服务器必须暴露且防火墙放行的公网端口，同一个frps下不可重复）
+remotePort = 5000
 
-#[二选一即可]每台机器不可重复，通过 http://smsf.demo.com 访问
-[SmsForwarder-HTTP]
-type = http
-local_ip = 127.0.0.1
-local_port = 5000
-#只要修改下面这一行
-custom_domains = smsf.demo.com
+#[二选一即可]每台机器的 name 和 customDomains 不可重复，通过 http://smsf.demo.com 访问
+[[proxies]]
+#同一个frps下，多台设备的 name 不可重复
+name = "SmsForwarder-HTTP-001"
+type = "http"
+localPort = 5000
+#只要修改下面这一行（在frps端将域名反代到vhost_http_port）
+customDomains = ["smsf.demo.com"]
+
 ', 0, '1651334400000')
 """.trimIndent()
                 )
@@ -397,7 +416,39 @@ CREATE TABLE "Task" (
 )
 """.trimIndent()
                 )
-                //TODO:原来的电量/网络/SIM卡状态转换为自动化任务
+            }
+        }
+
+        //自定义模板可用变量统一成英文标签
+        private val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                //替换自定义模板标签
+                var smsTemplate = SettingUtils.smsTemplate
+                //替换Rule.sms_template中的标签
+                var ruleColumnCN = "sms_template"
+                var ruleColumnTW = "sms_template"
+                //替换Sender.json_setting中的标签
+                var senderColumnCN = "json_setting"
+                var senderColumnTW = "json_setting"
+
+                for (i in TAG_LIST.indices) {
+                    val tagCN = TAG_LIST[i]["zh_CN"].toString()
+                    val tagTW = TAG_LIST[i]["zh_TW"].toString()
+                    val tagEN = TAG_LIST[i]["en"].toString()
+                    smsTemplate = smsTemplate.replace(tagCN, tagEN)
+                    ruleColumnCN = "REPLACE($ruleColumnCN, '$tagCN', '$tagEN')"
+                    ruleColumnTW = "REPLACE($ruleColumnTW, '$tagTW', '$tagEN')"
+                    senderColumnCN = "REPLACE($senderColumnCN, '$tagCN', '$tagEN')"
+                    senderColumnTW = "REPLACE($senderColumnTW, '$tagTW', '$tagEN')"
+                }
+
+                database.execSQL("UPDATE Rule SET sms_template = $ruleColumnCN WHERE sms_template != ''")
+                database.execSQL("UPDATE Rule SET sms_template = $ruleColumnTW WHERE sms_template != ''")
+
+                database.execSQL("UPDATE Sender SET json_setting = $senderColumnCN WHERE type NOT IN (4, 5, 6, 7, 8, 14)")
+                database.execSQL("UPDATE Sender SET json_setting = $senderColumnTW WHERE type NOT IN (4, 5, 6, 7, 8, 14)")
+
+                SettingUtils.smsTemplate = smsTemplate
             }
         }
 

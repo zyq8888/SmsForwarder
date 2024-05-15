@@ -110,8 +110,13 @@ class FrpcFragment : BaseFragment<FragmentTasksActionFrpcBinding?>(), View.OnCli
             Log.d(TAG, "initViews settingVo:$settingVo")
         }
 
-        //初始化发送通道下拉框
+        //初始化Frpc下拉框
         initFrpc()
+    }
+
+    override fun onDestroyView() {
+        if (mCountDownHelper != null) mCountDownHelper!!.recycle()
+        super.onDestroyView()
     }
 
     @SuppressLint("SetTextI18n")
@@ -133,7 +138,7 @@ class FrpcFragment : BaseFragment<FragmentTasksActionFrpcBinding?>(), View.OnCli
                         val taskAction = TaskSetting(TASK_ACTION_FRPC, getString(R.string.task_frpc), settingVo.description, Gson().toJson(settingVo), requestCode)
                         val taskActionsJson = Gson().toJson(arrayListOf(taskAction))
                         val msgInfo = MsgInfo("task", getString(R.string.task_frpc), settingVo.description, Date(), getString(R.string.task_frpc))
-                        val actionData = Data.Builder().putLong(TaskWorker.taskId, 0).putString(TaskWorker.taskActions, taskActionsJson).putString(TaskWorker.msgInfo, Gson().toJson(msgInfo)).build()
+                        val actionData = Data.Builder().putLong(TaskWorker.TASK_ID, 0).putString(TaskWorker.TASK_ACTIONS, taskActionsJson).putString(TaskWorker.MSG_INFO, Gson().toJson(msgInfo)).build()
                         val actionRequest = OneTimeWorkRequestBuilder<ActionWorker>().setInputData(actionData).build()
                         WorkManager.getInstance().enqueue(actionRequest)
                     } catch (e: Exception) {

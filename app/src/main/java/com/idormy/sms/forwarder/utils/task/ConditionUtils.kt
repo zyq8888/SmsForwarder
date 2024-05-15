@@ -1,9 +1,13 @@
 package com.idormy.sms.forwarder.utils.task
 
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.os.BatteryManager
 import com.google.gson.Gson
+import com.idormy.sms.forwarder.database.entity.Rule
 import com.idormy.sms.forwarder.entity.TaskSetting
 import com.idormy.sms.forwarder.entity.condition.BatterySetting
+import com.idormy.sms.forwarder.entity.condition.BluetoothSetting
 import com.idormy.sms.forwarder.entity.condition.ChargeSetting
 import com.idormy.sms.forwarder.entity.condition.CronSetting
 import com.idormy.sms.forwarder.entity.condition.LocationSetting
@@ -12,18 +16,23 @@ import com.idormy.sms.forwarder.entity.condition.NetworkSetting
 import com.idormy.sms.forwarder.entity.condition.SimSetting
 import com.idormy.sms.forwarder.utils.DELAY_TIME_AFTER_SIM_READY
 import com.idormy.sms.forwarder.utils.Log
+import com.idormy.sms.forwarder.utils.TASK_CONDITION_APP
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_BATTERY
+import com.idormy.sms.forwarder.utils.TASK_CONDITION_BLUETOOTH
+import com.idormy.sms.forwarder.utils.TASK_CONDITION_CALL
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_CHARGE
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_CRON
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_LEAVE_ADDRESS
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_LOCK_SCREEN
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_NETWORK
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_SIM
+import com.idormy.sms.forwarder.utils.TASK_CONDITION_SMS
 import com.idormy.sms.forwarder.utils.TASK_CONDITION_TO_ADDRESS
 import gatewayapps.crondroid.CronExpression
 import java.util.Date
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -37,8 +46,9 @@ class ConditionUtils private constructor() {
         private val TAG: String = ConditionUtils::class.java.simpleName
 
         //遍历条件列表，判断是否满足条件，默认不校验第一个条件（第一个条件是触发条件）
-        fun checkCondition(taskId: Long, conditionList: MutableList<TaskSetting>, startIndex: Int = 1): Boolean {
-            if (startIndex >= conditionList.size) {
+        fun checkCondition(taskId: Long, conditionList: MutableList<TaskSetting>, beginIndex: Int = 1, endIndex: Int = -1): Boolean {
+            val untilIndex = if (endIndex == -1) conditionList.size else min(endIndex + 1, conditionList.size)
+            if (beginIndex >= untilIndex) {
                 Log.d(TAG, "TASK-$taskId：no condition need to check")
                 return true
             }
@@ -46,8 +56,7 @@ class ConditionUtils private constructor() {
             //注意：触发条件 = SIM卡已准备就绪/网络状态改变时，延迟5秒（给够搜索信号时间）才执行任务
             val firstCondition = conditionList.firstOrNull()
             val needDelay = (firstCondition?.type == TASK_CONDITION_SIM && TaskUtils.simState == 5) || (firstCondition?.type == TASK_CONDITION_NETWORK && TaskUtils.networkState != 0)
-
-            for (i in startIndex until conditionList.size) {
+            for (i in beginIndex until untilIndex) { //不包括untilIndex
                 val condition = conditionList[i]
                 when (condition.type) {
                     TASK_CONDITION_CRON -> {
@@ -192,7 +201,7 @@ class ConditionUtils private constructor() {
 
                         val batteryStatus = TaskUtils.batteryStatus
                         val batteryPlugged = TaskUtils.batteryPlugged
-                        if (batteryStatus != chargeSetting.status || batteryPlugged != chargeSetting.plugged) {
+                        if (batteryStatus != chargeSetting.status || (chargeSetting.plugged != 0 && batteryPlugged != chargeSetting.plugged)) {
                             Log.d(TAG, "TASK-$taskId：batteryStatus or batteryPlugged is not match, chargeSetting = $chargeSetting")
                             return false
                         }
@@ -213,6 +222,59 @@ class ConditionUtils private constructor() {
 
                         Log.d(TAG, "TASK-$taskId：lockScreenAction is match, lockScreenSetting = $lockScreenSetting")
                     }
+
+                    TASK_CONDITION_SMS, TASK_CONDITION_CALL, TASK_CONDITION_APP -> {
+                        val ruleSetting = Gson().fromJson(condition.setting, Rule::class.java)
+                        if (ruleSetting == null) {
+                            Log.d(TAG, "TASK-$taskId：ruleSetting is null")
+                            continue
+                        }
+                        //TODO: 判断消息是否满足条件
+                    }
+
+                    TASK_CONDITION_BLUETOOTH -> {
+                        val bluetoothSetting = Gson().fromJson(condition.setting, BluetoothSetting::class.java)
+                        if (bluetoothSetting == null) {
+                            Log.d(TAG, "TASK-$taskId：bluetoothSetting is null")
+                            continue
+                        }
+
+                        when (bluetoothSetting.action) {
+                            BluetoothAdapter.ACTION_STATE_CHANGED -> {
+                                if (TaskUtils.bluetoothState != bluetoothSetting.state) {
+                                    Log.d(TAG, "TASK-$taskId：bluetoothState is not match, bluetoothSetting = $bluetoothSetting")
+                                    return false
+                                }
+                            }
+
+                            BluetoothDevice.ACTION_ACL_CONNECTED -> {
+                                if (!TaskUtils.connectedDevices.containsKey(bluetoothSetting.device)) {
+                                    Log.d(TAG, "TASK-$taskId：device is not connected, bluetoothSetting = $bluetoothSetting")
+                                    return false
+                                }
+                            }
+
+                            BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
+                                if (TaskUtils.connectedDevices.containsKey(bluetoothSetting.device)) {
+                                    Log.d(TAG, "TASK-$taskId：device is connected, bluetoothSetting = $bluetoothSetting")
+                                    return false
+                                }
+                            }
+
+                            BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
+                                if (bluetoothSetting.result == 1 && !TaskUtils.discoveredDevices.containsKey(bluetoothSetting.device)) {
+                                    Log.d(TAG, "TASK-$taskId：device is not discovered, bluetoothSetting = $bluetoothSetting")
+                                    return false
+                                } else if (bluetoothSetting.result == 0 && TaskUtils.discoveredDevices.containsKey(bluetoothSetting.device)) {
+                                    Log.d(TAG, "TASK-$taskId：device is discovered, bluetoothSetting = $bluetoothSetting")
+                                    return false
+                                }
+                            }
+                        }
+
+                        Log.d(TAG, "TASK-$taskId：bluetoothAction is match, bluetoothSetting = $bluetoothSetting")
+                    }
+
                 }
             }
 

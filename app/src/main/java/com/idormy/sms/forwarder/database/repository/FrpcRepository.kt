@@ -31,6 +31,10 @@ class FrpcRepository(private val frpcDao: FrpcDao) {
 
     fun getAutorun(): List<Frpc> = frpcDao.getAutorun()
 
-    fun getByUids(uids: List<String>, instr: String): List<Frpc> = frpcDao.getByUids(uids, instr)
+    fun getByUids(uids: List<String>, instr: String): List<Frpc> {
+        val frpcs = frpcDao.getByUids(uids)
+        // 将结果按照 instr() 的顺序进行排序
+        return frpcs.sortedBy { instr.indexOf(it.uid) }
+    }
 
 }

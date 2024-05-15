@@ -1,15 +1,16 @@
 package com.idormy.sms.forwarder.utils.sender
 
-import com.idormy.sms.forwarder.utils.Log
 import com.google.gson.Gson
 import com.idormy.sms.forwarder.database.entity.Rule
 import com.idormy.sms.forwarder.entity.MsgInfo
 import com.idormy.sms.forwarder.entity.result.GotifyResult
 import com.idormy.sms.forwarder.entity.setting.GotifySetting
+import com.idormy.sms.forwarder.utils.Log
 import com.idormy.sms.forwarder.utils.SendUtils
 import com.idormy.sms.forwarder.utils.SettingUtils
+import com.idormy.sms.forwarder.utils.interceptor.BasicAuthInterceptor
+import com.idormy.sms.forwarder.utils.interceptor.LoggingInterceptor
 import com.xuexiang.xhttp2.XHttp
-import com.xuexiang.xhttp2.cache.model.CacheMode
 import com.xuexiang.xhttp2.callback.SimpleCallBack
 import com.xuexiang.xhttp2.exception.ApiException
 
@@ -27,9 +28,9 @@ class GotifyUtils {
             msgId: Long = 0L
         ) {
             val title: String = if (rule != null) {
-                msgInfo.getTitleForSend(setting.title.toString(), rule.regexReplace)
+                msgInfo.getTitleForSend(setting.title, rule.regexReplace)
             } else {
-                msgInfo.getTitleForSend(setting.title.toString())
+                msgInfo.getTitleForSend(setting.title)
             }
             val content: String = if (rule != null) {
                 msgInfo.getContentForSend(rule.smsTemplate, rule.regexReplace)
@@ -55,12 +56,11 @@ class GotifyUtils {
                 .params("priority", setting.priority)
                 .ignoreHttpsCert() //忽略https证书
                 .keepJson(true)
-                .timeOut((SettingUtils.requestTimeout * 1000).toLong()) //超时时间10s
-                .cacheMode(CacheMode.NO_CACHE)
                 .retryCount(SettingUtils.requestRetryTimes) //超时重试的次数
-                .retryDelay(SettingUtils.requestDelayTime) //超时重试的延迟时间
-                .retryIncreaseDelay(SettingUtils.requestDelayTime) //超时重试叠加延时
-                .timeStamp(true)
+                .retryDelay(SettingUtils.requestDelayTime * 1000) //超时重试的延迟时间
+                .retryIncreaseDelay(SettingUtils.requestDelayTime * 1000) //超时重试叠加延时
+                .timeStamp(true) //url自动追加时间戳，避免缓存
+                .addInterceptor(LoggingInterceptor(logId)) //增加一个log拦截器, 记录请求日志
                 .execute(object : SimpleCallBack<String>() {
 
                     override fun onError(e: ApiException) {
